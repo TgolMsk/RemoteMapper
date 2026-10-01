@@ -27,7 +27,8 @@ public struct LogEntry: Identifiable, Hashable, Sendable {
 @Observable
 public final class RemoteEngine {
     public let device: RemoteDevice
-    public let touch: TouchSurface
+    /// 官网版为 MultitouchSupport 触控面；App Store 版为 nil
+    public let touch: (any TouchSource)?
     public let battery: BatteryMonitor
     public let store: ConfigStore
     @ObservationIgnored public let runner = ActionRunner()
@@ -51,7 +52,7 @@ public final class RemoteEngine {
     @ObservationIgnored private var pressFrontmost: [RemoteButton: String] = [:]
     private static let logLimit = 40
 
-    public init(store: ConfigStore, device: RemoteDevice = RemoteDevice(), touch: TouchSurface = TouchSurface(),
+    public init(store: ConfigStore, device: RemoteDevice = RemoteDevice(), touch: (any TouchSource)? = nil,
                 battery: BatteryMonitor = BatteryMonitor()) {
         self.store = store
         self.device = device
@@ -67,7 +68,7 @@ public final class RemoteEngine {
         gestures.onOutput = { [unowned self] in self.handle($0) }
         device.onButton = { [unowned self] button, isDown in self.handle(button, isDown: isDown) }
         device.onConnectionChange = { [unowned self] connected in
-            connected ? self.touch.start() : self.touch.stop()
+            connected ? self.touch?.start() : self.touch?.stop()
             self.touchRecognizer.reset()
             if connected {
                 self.battery.targetName = self.device.productName
@@ -76,7 +77,7 @@ public final class RemoteEngine {
                 self.battery.remoteDisconnected()
             }
         }
-        touch.onFrame = { [unowned self] frame in
+        touch?.onFrame = { [unowned self] frame in
             guard self.store.config.touch.isEnabled else { return }
             self.touchRecognizer.handle(frame)
         }
@@ -99,7 +100,7 @@ public final class RemoteEngine {
         }
         device.start()
         if device.isConnected {
-            touch.start()
+            touch?.start()
             battery.targetName = device.productName
             battery.start()
         }

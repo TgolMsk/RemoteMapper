@@ -132,7 +132,8 @@ extension BatteryMonitor: @MainActor CBCentralManagerDelegate {
     }
 
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        peripheral.discoverServices([Self.batteryService])
+        // 枚举全部可见服务：电池服务用于读电量，其余仅记录到诊断日志
+        peripheral.discoverServices(nil)
     }
 
     public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -153,7 +154,12 @@ extension BatteryMonitor: @MainActor CBCentralManagerDelegate {
 
 extension BatteryMonitor: @MainActor CBPeripheralDelegate {
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard let service = peripheral.services?.first(where: { $0.uuid == Self.batteryService }) else {
+        let services = peripheral.services ?? []
+        Self.log.info("遥控器对 CoreBluetooth 可见的服务：\(services.map(\.uuid.uuidString).joined(separator: ", "), privacy: .public)")
+        for other in services where other.uuid != Self.batteryService {
+            peripheral.discoverCharacteristics(nil, for: other)
+        }
+        guard let service = services.first(where: { $0.uuid == Self.batteryService }) else {
             status = error.map { .failed($0.localizedDescription) } ?? .notSupported
             return
         }
@@ -161,6 +167,11 @@ extension BatteryMonitor: @MainActor CBPeripheralDelegate {
     }
 
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        guard service.uuid == Self.batteryService else {
+            let list = (service.characteristics ?? []).map { "\($0.uuid.uuidString)[\($0.properties.rawValue)]" }
+            Self.log.info("服务 \(service.uuid.uuidString, privacy: .public) 的特征：\(list.joined(separator: ", "), privacy: .public)")
+            return
+        }
         guard let characteristic = service.characteristics?.first(where: { $0.uuid == Self.batteryLevel }) else {
             status = error.map { .failed($0.localizedDescription) } ?? .notSupported
             return

@@ -17,8 +17,9 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 
-targets:
-  RemoteMapper:
+# 两个版本共用的源码与设置
+targetTemplates:
+  RemoteMapperApp:
     type: application
     platform: macOS
     sources:
@@ -26,6 +27,28 @@ targets:
       - path: App/Resources
     dependencies:
       - package: RemoteKit
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: Apple Development
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        DEAD_CODE_STRIPPING: YES
+
+targets:
+  # 官网版：Developer ID 签名 + 公证，功能完整
+  RemoteMapper:
+    templates: [RemoteMapperApp]
+    dependencies:
+      - package: RemoteKit
+        product: RemoteKit
+      - package: RemoteKit
+        product: RemoteKitTouch
+      - package: RemoteKit
+        product: RemoteKitScripts
     info:
       path: App/Info.plist
       properties:
@@ -47,11 +70,31 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ws.RemoteMapper
         PRODUCT_NAME: RemoteMapper
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: Apple Development
-        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
-        SWIFT_APPROACHABLE_CONCURRENCY: YES
-        ENABLE_USER_SCRIPT_SANDBOXING: YES
-        DEAD_CODE_STRIPPING: YES
+
+  # App Store 版：沙盒，去掉私有接口与执行外部命令的功能
+  RemoteMapperLite:
+    templates: [RemoteMapperApp]
+    info:
+      path: App/Lite-Info.plist
+      properties:
+        CFBundleDisplayName: RemoteMapper Lite
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSBluetoothAlwaysUsageDescription: RemoteMapper Lite 通过蓝牙读取 Siri Remote 的电量。
+        NSHumanReadableCopyright: ""
+    entitlements:
+      path: App/RemoteMapperLite.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.device.bluetooth: true
+        com.apple.security.device.usb: true
+        com.apple.security.files.user-selected.read-only: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ws.RemoteMapper.Lite
+        PRODUCT_NAME: RemoteMapper Lite
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) APP_STORE

@@ -86,10 +86,12 @@ final class AppModel {
 
     @ObservationIgnored private var permissionTimer: Timer?
 
-    init(store: ConfigStore = ConfigStore(), device: RemoteDevice = RemoteDevice(), touch: TouchSurface = TouchSurface(),
-         startsEngine: Bool = true) {
+    init(store: ConfigStore = ConfigStore(), device: RemoteDevice = RemoteDevice(),
+         touch: (any TouchSource)? = Edition.makeTouchSource(), startsEngine: Bool = true) {
         self.store = store
         engine = RemoteEngine(store: store, device: device, touch: touch)
+        engine.runner.unsupportedKinds = Edition.unsupportedActions
+        engine.runner.scriptExecutor = Edition.scriptExecutor
         selectedProfileID = store.config.globalProfile.id
         store.onChange = { [weak self] _ in self?.engine.configDidChange() }
         engine.isPreviewOnly = { [weak self] in self?.isSettingsKey ?? false }
@@ -217,7 +219,8 @@ final class AppModel {
     }
 
     func requestAccessibility() {
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        // 沙盒中无法弹出系统授权框，直接打开系统设置让用户手动添加
+        let options = ["AXTrustedCheckOptionPrompt": !Edition.isAppStore] as CFDictionary
         if !AXIsProcessTrustedWithOptions(options) {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
@@ -245,14 +248,13 @@ extension AppModel {
         let store = ConfigStore(fileURL: URL(fileURLWithPath: "/dev/null"), persists: false, initial: .default)
         let device = RemoteDevice()
         device.simulate(connected: true, pressed: pressed, productName: "C08KJ2532330")
-        let touch = TouchSurface()
-        touch.simulate(contacts: touches)
-        let model = AppModel(store: store, device: device, touch: touch, startsEngine: false)
+        let model = AppModel(store: store, device: device, touch: Edition.makePreviewTouchSource(contacts: touches),
+                             startsEngine: false)
         model.hasAccessibility = true
         model.engine.battery.simulate(level: 82)
         let now = Date()
-        model.engine.appendPreviewLog([
-            LogEntry(date: now, button: nil, gesture: nil, touch: .swipeRight, title: "下一个标签页", kind: .action),
+        let touchEntry = LogEntry(date: now, button: nil, gesture: nil, touch: .swipeRight, title: "下一个标签页", kind: .action)
+        model.engine.appendPreviewLog((Edition.supportsTouch ? [touchEntry] : []) + [
             LogEntry(date: now.addingTimeInterval(-2), button: .siri, gesture: .hold, title: "按住说话", kind: .action),
             LogEntry(date: now.addingTimeInterval(-4), button: .playPause, gesture: .tap, title: "切换权限模式", kind: .action),
             LogEntry(date: now.addingTimeInterval(-9), button: .tv, gesture: .longPress, title: "切换到 Codex", kind: .action),

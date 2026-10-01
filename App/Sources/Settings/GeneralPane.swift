@@ -32,6 +32,7 @@ struct GeneralPane: View {
                                  value: $model.config.doubleTapInterval, range: 0.15...0.5, tint: Theme.live, showsDivider: false)
                 }
 
+                if Edition.supportsTouch {
                 SettingsGroup("触控") {
                     SettingRow(title: "启用触控手势", detail: "在遥控器触控板上滑动或沿外圈转动来触发动作。", symbol: "hand.draw") {
                         Toggle("启用触控手势", isOn: $model.config.touch.isEnabled).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
@@ -43,9 +44,10 @@ struct GeneralPane: View {
                                  value: $model.config.touch.rotationStep, range: 10...90, tint: Theme.live, showsDivider: false,
                                  format: { String(format: "%.0f°", $0) }, step: 5)
                 }
+                }
 
                 SettingsGroup("启动") {
-                    SettingRow(title: "登录时自动启动", detail: "RemoteMapper 只常驻在菜单栏，不占用程序坞。",
+                    SettingRow(title: "登录时自动启动", detail: "\(Edition.name) 只常驻在菜单栏，不占用程序坞。",
                                symbol: "sunrise", showsDivider: false) {
                         Toggle("登录时自动启动", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                             .toggleStyle(.switch).labelsHidden().tint(Theme.accent)

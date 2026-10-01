@@ -32,15 +32,16 @@ struct DiagnosticsPane: View {
                             mono: true, showsDivider: false)
                 }
 
+                if let touch = model.engine.touch {
                 SettingsGroup("触控面", trailing: AnyView(
-                    Text("MultitouchSupport").font(Theme.mono(10.5)).foregroundStyle(.tertiary)
+                    Text("系统触控驱动").font(.system(size: 10.5)).foregroundStyle(.tertiary)
                 )) {
-                    let touch = model.engine.touch
                     InfoRow(label: "状态", value: touchStatus(touch.status), valueColor: touch.isRunning ? Theme.live : nil)
                     InfoRow(label: "尺寸", value: touch.surfaceSize.map { String(format: "%.2f × %.2f mm", $0.width, $0.height) } ?? "—",
                             mono: true)
                     InfoRow(label: "当前触点", value: contactText(touch.contacts), mono: true)
                     InfoRow(label: "最近识别", value: model.lastTouch?.gesture.displayName ?? "—", showsDivider: false)
+                }
                 }
 
                 SettingsGroup("按键位图", trailing: AnyView(
@@ -68,7 +69,7 @@ struct DiagnosticsPane: View {
         .scrollIndicators(.never)
     }
 
-    private func touchStatus(_ status: TouchSurface.Status) -> String {
+    private func touchStatus(_ status: TouchSourceStatus) -> String {
         switch status {
         case .idle: "等待遥控器连接"
         case .notFound: "未找到触控面"

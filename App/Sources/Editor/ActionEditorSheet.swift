@@ -9,6 +9,7 @@ enum EditorKind: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .scroll, .launchApp, .openURL, .shell, .appleScript]
+        .filter { !Edition.unsupportedActions.contains($0.actionKind) }
 
     var title: String {
         switch self {

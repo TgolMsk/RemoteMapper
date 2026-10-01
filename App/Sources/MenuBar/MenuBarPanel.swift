@@ -14,7 +14,7 @@ struct MenuBarPanel: View {
             HStack(spacing: 12) {
                 AppGlyph(size: 38)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("RemoteMapper").font(.system(size: 14, weight: .semibold)).fixedSize()
+                    Text(Edition.name).font(.system(size: 14, weight: .semibold)).fixedSize()
                     HStack(spacing: 5) {
                         Circle().fill(device.isConnected ? Theme.live : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
                         Text(device.isConnected ? "遥控器已连接" : "等待遥控器连接")
@@ -71,7 +71,7 @@ struct MenuBarPanel: View {
                     NSApp.activate()
                 }
                 .keyboardShortcut(",")
-                MenuRow(title: "退出 RemoteMapper", shortcut: "⌘Q") { NSApp.terminate(nil) }
+                MenuRow(title: "退出 \(Edition.name)", shortcut: "⌘Q") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }
             .padding(6)

@@ -1,12 +1,16 @@
 import AppKit
 import ApplicationServices
 
-/// 执行动作。键盘类动作需要辅助功能权限；Shell 与 AppleScript 在子进程中运行，不阻塞主线程。
+/// 执行动作。键盘类动作需要辅助功能权限；Shell 与 AppleScript 由注入的 scriptExecutor 在子进程中运行。
 public final class ActionRunner {
     /// 动作失败时的说明，由上层写入事件日志
     public var onError: (String) -> Void = { _ in }
 
     private var holds: [RemoteButton: HoldSession] = [:]
+    /// 当前版本不支持的动作类型（App Store 版不执行 Shell 与 AppleScript）
+    public var unsupportedKinds: Set<Action.Kind> = []
+    /// 执行 Shell 与 AppleScript，返回错误说明；为 nil 时这两类动作不可用
+    public var scriptExecutor: ((Action) async -> String?)?
 
     public init() {}
 
@@ -37,6 +41,10 @@ public final class ActionRunner {
     }
 
     private func execute(_ action: Action) async {
+        if unsupportedKinds.contains(action.kind) {
+            onError("此版本不支持「\(action.kind.displayName)」动作")
+            return
+        }
         switch action {
         case .keystroke(let combo), .holdKey(let combo):
             guard requireAccessibility() else { return }
@@ -74,11 +82,13 @@ public final class ActionRunner {
                 onError("无法打开 \(bundleID)：\(error.localizedDescription)")
             }
 
-        case .shell(let command):
-            await run("/bin/zsh", ["-lc", command], label: "Shell")
-
-        case .appleScript(let source):
-            await run("/usr/bin/osascript", ["-e", source], label: "AppleScript")
+        case .shell, .appleScript:
+            // 执行外部命令的代码在 RemoteKitScripts 中，仅官网版注入
+            guard let scriptExecutor else {
+                onError("此版本不支持「\(action.kind.displayName)」动作")
+                return
+            }
+            if let message = await scriptExecutor(action) { onError(message) }
 
         case .sequence(let actions):
             for step in actions { await execute(step) }
@@ -92,27 +102,5 @@ public final class ActionRunner {
         if Self.hasAccessibility { return true }
         onError("需要「辅助功能」权限才能模拟按键")
         return false
-    }
-
-    private func run(_ executable: String, _ arguments: [String], label: String) async {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        let stderr = Pipe()
-        process.standardError = stderr
-        process.standardOutput = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
-            onError("\(label) 启动失败：\(error.localizedDescription)")
-            return
-        }
-        let status = await withCheckedContinuation { continuation in
-            process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
-        }
-        guard status != 0 else { return }
-        let message = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        onError("\(label) 退出码 \(status)" + (message.isEmpty ? "" : "：\(message.prefix(120))"))
     }
 }

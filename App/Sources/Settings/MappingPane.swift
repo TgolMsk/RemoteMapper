@@ -11,8 +11,8 @@ struct MappingPane: View {
             VStack(alignment: .leading, spacing: 26) {
                 if !model.hasAccessibility { AccessibilityBanner() }
                 ProfileStrip()
-                MappingModeSwitch()
-                switch model.mappingMode {
+                if Edition.supportsTouch { MappingModeSwitch() }
+                switch Edition.supportsTouch ? model.mappingMode : .buttons {
                 case .buttons:
                     ButtonHeader(button: model.selectedButton)
                     GestureCard(button: model.selectedButton)
@@ -47,7 +47,9 @@ struct AccessibilityBanner: View {
                 .background(Theme.warning.gradient, in: .rect(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("需要「辅助功能」权限").font(.system(size: 13, weight: .semibold))
-                Text("授权后才能模拟按键、拦截系统媒体键。打开链接、运行命令不受影响。")
+                Text(Edition.isAppStore
+                     ? "在「系统设置 › 隐私与安全性 › 辅助功能」中打开 \(Edition.name)，才能模拟按键。"
+                     : "授权后才能模拟按键、拦截系统媒体键。打开链接、运行命令不受影响。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
             }
@@ -574,16 +576,17 @@ struct TouchHeader: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let touch = model.engine.touch
+        let status = model.engine.touch?.status ?? .unavailable("此版本不支持")
+        let surfaceSize = model.engine.touch?.surfaceSize
         HStack(alignment: .center, spacing: 16) {
             KeyGlyph(symbol: "hand.draw", size: 58)
             VStack(alignment: .leading, spacing: 7) {
                 Text("触控手势").font(.system(size: 24, weight: .semibold))
                 HStack(spacing: 6) {
-                    if let size = touch.surfaceSize {
+                    if let size = surfaceSize {
                         Tag(text: String(format: "%.1f × %.1f mm", size.width, size.height), mono: true)
                     }
-                    switch touch.status {
+                    switch status {
                     case .running: Tag(text: "触控面已识别", tint: Theme.live)
                     case .notFound: Tag(text: "未找到触控面", tint: Theme.warning)
                     case .unavailable(let message): Tag(text: message, tint: Theme.warning)

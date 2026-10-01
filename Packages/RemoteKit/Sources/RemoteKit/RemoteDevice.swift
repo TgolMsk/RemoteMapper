@@ -1,6 +1,7 @@
 import Foundation
 import IOKit.hid
 import Observation
+import os
 
 /// 通过 IOHIDManager 读取 Siri Remote 按键接口的原始报告。
 /// 回调都挂在主线程 run loop 上，因此在主线程处理。
@@ -16,7 +17,10 @@ public final class RemoteDevice {
         case failed(String)
     }
 
-    public private(set) var status: Status = .idle
+    public private(set) var status: Status = .idle {
+        didSet { if status != oldValue { Self.log.info("遥控器状态：\(String(describing: self.status), privacy: .public)") } }
+    }
+    private static let log = Logger(subsystem: "com.ws.RemoteMapper", category: "device")
     public private(set) var productName: String?
     public private(set) var pressed: Set<RemoteButton> = []
     public private(set) var lastReport: [UInt8] = []

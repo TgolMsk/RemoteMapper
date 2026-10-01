@@ -2,6 +2,8 @@ import CoreGraphics
 import Foundation
 import IOKit
 import Observation
+import RemoteKit
+import os
 import Synchronization
 
 /// 通过私有框架 MultitouchSupport 读取 Siri Remote 触控面的触点。
@@ -10,15 +12,13 @@ import Synchronization
 /// 因此不需要解析原始 HID 报告。私有接口没有头文件，函数以 dlsym 动态加载，
 /// MTTouch 结构按偏移读取（布局沿用社区逆向结果，每个触点 96 字节）。
 @Observable
-public final class TouchSurface {
-    public enum Status: Equatable, Sendable {
-        case idle
-        case notFound
-        case running
-        case unavailable(String)
-    }
+public final class TouchSurface: TouchSource {
+    public typealias Status = TouchSourceStatus
 
-    public private(set) var status: Status = .idle
+    public private(set) var status: Status = .idle {
+        didSet { if status != oldValue { Self.log.info("触控面状态：\(String(describing: self.status), privacy: .public)") } }
+    }
+    private static let log = Logger(subsystem: "com.ws.RemoteMapper", category: "touch")
     /// 当前接触中的触点，供界面实时显示
     public private(set) var contacts: [TouchContact] = []
     /// 触控面尺寸（毫米）
@@ -33,10 +33,10 @@ public final class TouchSurface {
 
     public init() {}
 
-    public var isRunning: Bool { status == .running }
+    public func start() { start(retries: 5) }
 
     /// 查找遥控器的触控面并开始接收触点；遥控器刚连上时触控设备可能稍晚出现，会自动重试几次
-    public func start(retries: Int = 5) {
+    public func start(retries: Int) {
         guard device == nil else { return }
         retryTask?.cancel()
         guard let api = MultitouchAPI.shared else {

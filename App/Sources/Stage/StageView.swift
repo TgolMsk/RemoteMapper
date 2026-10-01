@@ -156,7 +156,7 @@ struct TouchOverlay: View {
     @State private var flashVisible = false
 
     var body: some View {
-        let contacts = model.engine.touch.contacts
+        let contacts = model.engine.touch?.contacts ?? []
         ZStack {
             if trail.count > 1 {
                 Path { path in path.addLines(trail) }
