@@ -27,6 +27,7 @@ enum Theme {
     /// 预设分组的识别色，方便在列表中快速区分工具
     static func tint(for group: Preset.Group?) -> Color {
         switch group {
+        case .voice: Color(.sRGB, red: 0.93, green: 0.36, blue: 0.47)
         case .claudeCode: accent
         case .claudeDesktop: Color(.sRGB, red: 0.85, green: 0.47, blue: 0.34)
         case .codex: Color(.sRGB, red: 0.16, green: 0.66, blue: 0.58)

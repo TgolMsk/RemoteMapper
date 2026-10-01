@@ -57,19 +57,21 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
     public var longPressThreshold: Double
     public var doubleTapInterval: Double
     public var touch: TouchSettings
+    public var voice: VoiceSettings
     public var profiles: [Profile]
 
     public static let currentVersion = 2
 
     public init(version: Int = RemoteConfig.currentVersion, isEnabled: Bool = true, interceptSystemKeys: Bool = true,
                 longPressThreshold: Double = 0.45, doubleTapInterval: Double = 0.28, touch: TouchSettings = TouchSettings(),
-                profiles: [Profile]) {
+                voice: VoiceSettings = VoiceSettings(), profiles: [Profile]) {
         self.version = version
         self.isEnabled = isEnabled
         self.interceptSystemKeys = interceptSystemKeys
         self.longPressThreshold = longPressThreshold
         self.doubleTapInterval = doubleTapInterval
         self.touch = touch
+        self.voice = voice
         self.profiles = profiles
         ensureGlobalProfile()
     }
@@ -83,6 +85,19 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
 
     public var gestureTiming: GestureTiming {
         GestureTiming(longPress: longPressThreshold, doubleTap: doubleTapInterval)
+    }
+
+    /// 是否有任何按键或触控手势绑定了语音输入
+    public var usesDictation: Bool {
+        func isDictation(_ action: Action) -> Bool {
+            if case .dictation = action { return true }
+            if case .sequence(let steps) = action { return steps.contains(where: isDictation) }
+            return false
+        }
+        return profiles.contains { profile in
+            profile.mappings.values.contains { mapping in RemoteGesture.allCases.contains { mapping[$0].map { isDictation($0.action) } ?? false } }
+                || profile.touchMappings.values.contains { isDictation($0.action) }
+        }
     }
 
     /// 前台 App 对应的专属配置
@@ -142,7 +157,7 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, isEnabled, interceptSystemKeys, longPressThreshold, doubleTapInterval, touch, profiles
+        case version, isEnabled, interceptSystemKeys, longPressThreshold, doubleTapInterval, touch, voice, profiles
     }
 
     public init(from decoder: Decoder) throws {
@@ -155,6 +170,7 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
         longPressThreshold = try c.decodeIfPresent(Double.self, forKey: .longPressThreshold) ?? defaults.longPressThreshold
         doubleTapInterval = try c.decodeIfPresent(Double.self, forKey: .doubleTapInterval) ?? defaults.doubleTapInterval
         touch = try c.decodeIfPresent(TouchSettings.self, forKey: .touch) ?? defaults.touch
+        voice = try c.decodeIfPresent(VoiceSettings.self, forKey: .voice) ?? defaults.voice
         profiles = try c.decodeIfPresent([Profile].self, forKey: .profiles) ?? []
         ensureGlobalProfile()
     }
@@ -175,7 +191,7 @@ public extension RemoteConfig {
             .right: ButtonMapping(tap: key(.rightArrow, "方向键", "arrow.right"), repeatWhileHeld: true),
             .select: ButtonMapping(tap: key(.returnKey, "确认", "return")),
             .back: ButtonMapping(tap: key(.escape, "返回", "escape")),
-            .siri: ButtonMapping(tap: preset("claudeDesktop.quickEntry")),
+            .siri: ButtonMapping(hold: preset("voice.dictation")),
             .tv: ButtonMapping(tap: preset("claudeDesktop.activate"),
                                doubleTap: preset("system.iTerm"),
                                longPress: preset("codex.activate")),
@@ -190,7 +206,7 @@ public extension RemoteConfig {
         ])
 
         let terminal = Profile(name: "终端", bundleIDs: [KnownApp.iTerm, KnownApp.terminal], mappings: [
-            .siri: ButtonMapping(hold: preset("claudeCode.voice")),
+            .siri: ButtonMapping(hold: preset("voice.dictation")),
             .playPause: ButtonMapping(tap: preset("claudeCode.cycleMode"), longPress: preset("claudeCode.interrupt")),
             .back: ButtonMapping(tap: preset("claudeCode.cancel")),
             .select: ButtonMapping(tap: preset("claudeCode.submit")),

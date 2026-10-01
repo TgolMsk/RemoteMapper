@@ -32,6 +32,8 @@ struct GeneralPane: View {
                                  value: $model.config.doubleTapInterval, range: 0.15...0.5, tint: Theme.live, showsDivider: false)
                 }
 
+                VoiceSettingsGroup()
+
                 if Edition.supportsTouch {
                 SettingsGroup("触控") {
                     SettingRow(title: "启用触控手势", detail: "在遥控器触控板上滑动或沿外圈转动来触发动作。", symbol: "hand.draw") {
@@ -177,5 +179,123 @@ struct TimingDiagram: View {
             .overlay(Circle().strokeBorder(color, lineWidth: 3))
             .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
             .offset(x: x - 7, y: trackY - 7)
+    }
+}
+
+/// 语音输入设置：麦克风、识别语言、语音模型、浮窗
+struct VoiceSettingsGroup: View {
+    @Environment(AppModel.self) private var model
+    @State private var devices: [AudioInputDevice] = []
+    @State private var defaultDevice: AudioInputDevice?
+
+    private static let languages: [(id: String?, name: String)] = [
+        (nil, "跟随系统"), ("zh-CN", "中文（普通话）"), ("zh-TW", "中文（台湾）"), ("zh-HK", "粤语（香港）"),
+        ("en-US", "English (US)"), ("ja-JP", "日本語"),
+    ]
+
+    var body: some View {
+        @Bindable var model = model
+        let dictation = model.engine.dictation
+        SettingsGroup("语音输入") {
+            SettingRow(title: "录音来源", detail: "选择遥控器内置麦克风，或使用连接到 Mac 的麦克风。", symbol: "appletvremote.gen4") {
+                Picker("录音来源", selection: $model.config.voice.usesRemoteMicrophone) {
+                    Text("遥控器麦克风").tag(true)
+                    Text("Mac 音频输入").tag(false)
+                }.labelsHidden().fixedSize()
+            }
+            if model.config.voice.usesRemoteMicrophone {
+                SettingRow(title: "Siri Remote Mic",
+                           detail: remoteDetail,
+                           symbol: model.microphoneBridge.isInstalled ? "mic.fill" : "mic.slash") {
+                    if model.microphoneBridge.isBusy {
+                        ProgressView().controlSize(.small)
+                    } else if model.microphoneBridge.isInstalled {
+                        if defaultDevice?.uid == AudioInputDevices.remoteMicrophoneUID {
+                            Label("系统输入", systemImage: "checkmark.circle.fill")
+                                .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.live)
+                        } else {
+                            Button("设为系统输入") { model.microphoneBridge.useAsSystemInput() }
+                        }
+                    } else {
+                        #if !APP_STORE
+                        Button("安装并设为系统输入") { Task { await model.microphoneBridge.install() } }
+                        #else
+                        Text("需安装官网版音频组件").font(.system(size: 12)).foregroundStyle(.secondary)
+                        #endif
+                    }
+                }
+            } else {
+                SettingRow(title: "麦克风",
+                           detail: devices.isEmpty ? "未检测到麦克风：请连接 AirPods、耳机或 USB 麦克风。" : "按住遥控器说话时使用的录音设备。",
+                           symbol: devices.isEmpty ? "mic.slash" : "mic") {
+                    Picker("麦克风", selection: $model.config.voice.inputDeviceUID) {
+                        Text("系统默认（\(defaultDevice?.name ?? "无")）").tag(String?.none)
+                        if !devices.isEmpty { Divider() }
+                        ForEach(devices) { device in
+                            Text(device.name).tag(String?.some(device.uid))
+                        }
+                        if let uid = model.config.voice.inputDeviceUID, !devices.contains(where: { $0.uid == uid }) {
+                            Text("已断开的麦克风").tag(String?.some(uid))
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
+            SettingRow(title: "识别语言", detail: "完全在本机识别，语音不会上传。", symbol: "character.bubble") {
+                Picker("识别语言", selection: $model.config.voice.localeIdentifier) {
+                    ForEach(Self.languages, id: \.name) { language in
+                        Text(language.name).tag(language.id)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            SettingRow(title: "语音模型", detail: modelDetail(dictation.modelState), symbol: "square.and.arrow.down") {
+                switch dictation.modelState {
+                case .installed:
+                    Label("已安装", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.live)
+                case .downloading(let progress):
+                    ProgressView(value: progress).frame(width: 120)
+                case .notInstalled, .unknown:
+                    Button("下载") { Task { await dictation.installModel() } }
+                case .unsupported:
+                    Text("不支持").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            SettingRow(title: "显示识别浮窗", detail: "录音时在屏幕底部实时显示识别结果。",
+                       symbol: "rectangle.bottomthird.inset.filled", showsDivider: false) {
+                Toggle("显示识别浮窗", isOn: $model.config.voice.showsHUD)
+                    .toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+            }
+        }
+        .task {
+            // 麦克风可能随时插拔（AirPods 连接、USB 麦克风插入），定时刷新
+            while !Task.isCancelled {
+                devices = AudioInputDevices.all()
+                defaultDevice = AudioInputDevices.defaultDevice
+                model.microphoneBridge.refresh()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .task { await dictation.refreshModelState() }
+    }
+
+    private var remoteDetail: String {
+        if let message = model.microphoneBridge.message { return message }
+        if model.microphoneBridge.isInstalled { return "按住 Siri 键说话，其他 App 也可选择此输入；松开后静音。" }
+        return "安装需要管理员授权，并会短暂重启系统音频。需已安装 Apple PacketLogger。"
+    }
+
+    private func modelDetail(_ state: VoiceDictation.ModelState) -> String {
+        switch state {
+        case .installed: "当前语言的识别模型已就绪。"
+        case .downloading(let progress): "正在下载… \(Int(progress * 100))%"
+        case .notInstalled: "首次使用需要下载当前语言的识别模型。"
+        case .unsupported: "此 Mac 不支持所选语言的本机识别。"
+        case .unknown: "正在检查…"
+        }
     }
 }

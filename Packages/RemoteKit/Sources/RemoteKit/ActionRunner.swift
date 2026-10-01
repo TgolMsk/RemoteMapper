@@ -11,6 +11,11 @@ public final class ActionRunner {
     public var unsupportedKinds: Set<Action.Kind> = []
     /// 执行 Shell 与 AppleScript，返回错误说明；为 nil 时这两类动作不可用
     public var scriptExecutor: ((Action) async -> String?)?
+    /// 语音输入
+    public var dictation: VoiceDictation?
+    /// 由「按住」开始的语音输入属于哪个按钮；单击切换开始的为 nil
+    private var dictationOwner: RemoteButton?
+    private var dictationSubmit = false
 
     public init() {}
 
@@ -20,8 +25,12 @@ public final class ActionRunner {
         Task { await execute(action) }
     }
 
-    /// 「按住」开始：holdKey 保持按下，其它动作在开始时执行一次
+    /// 「按住」开始：holdKey 保持按下，语音输入开始录音，其它动作在开始时执行一次
     public func begin(_ action: Action, for button: RemoteButton) {
+        if case .dictation(let submit) = action {
+            startDictation(submit: submit, owner: button)
+            return
+        }
         guard case .holdKey(let combo) = action else {
             perform(action)
             return
@@ -33,9 +42,12 @@ public final class ActionRunner {
 
     public func end(for button: RemoteButton) {
         holds.removeValue(forKey: button)?.end()
+        if dictationOwner == button { finishDictation() }
     }
 
     public func endAll() {
+        if dictation?.isActive == true { dictation?.cancel() }
+        dictationOwner = nil
         for session in holds.values { session.end() }
         holds.removeAll()
     }
@@ -56,6 +68,14 @@ public final class ActionRunner {
             if submit {
                 try? await Task.sleep(for: .milliseconds(30))
                 KeyboardSynth.tap(.returnKey)
+            }
+
+        case .dictation(let submit):
+            // 单击等手势：按一次开始，再按一次结束
+            if dictation?.isActive == true, dictationOwner == nil {
+                finishDictation()
+            } else if dictation?.isActive != true {
+                startDictation(submit: submit, owner: nil)
             }
 
         case .scroll(let direction, let lines):
@@ -95,6 +115,30 @@ public final class ActionRunner {
 
         case .delay(let ms):
             try? await Task.sleep(for: .milliseconds(ms))
+        }
+    }
+
+    private func startDictation(submit: Bool, owner: RemoteButton?) {
+        guard let dictation else {
+            onError("语音输入不可用")
+            return
+        }
+        dictationOwner = owner
+        dictationSubmit = submit
+        dictation.start()
+    }
+
+    /// 结束录音，把识别出的文字输入到当前 App
+    private func finishDictation() {
+        let submit = dictationSubmit
+        dictationOwner = nil
+        Task {
+            guard let text = await dictation?.stop(), requireAccessibility() else { return }
+            KeyboardSynth.type(text)
+            if submit {
+                try? await Task.sleep(for: .milliseconds(30))
+                KeyboardSynth.tap(.returnKey)
+            }
         }
     }
 

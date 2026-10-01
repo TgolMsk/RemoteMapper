@@ -4,11 +4,11 @@ import SwiftUI
 
 /// 编辑器左侧的分类
 enum EditorKind: String, CaseIterable, Identifiable {
-    case preset, keystroke, holdKey, text, scroll, launchApp, openURL, shell, appleScript, sequence
+    case preset, keystroke, holdKey, text, dictation, scroll, launchApp, openURL, shell, appleScript, sequence
 
     var id: String { rawValue }
 
-    static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .scroll, .launchApp, .openURL, .shell, .appleScript]
+    static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .dictation, .scroll, .launchApp, .openURL, .shell, .appleScript]
         .filter { !Edition.unsupportedActions.contains($0.actionKind) }
 
     var title: String {
@@ -32,6 +32,7 @@ enum EditorKind: String, CaseIterable, Identifiable {
         case .keystroke: .keystroke
         case .holdKey: .holdKey
         case .text: .text
+        case .dictation: .dictation
         case .scroll: .scroll
         case .launchApp: .launchApp
         case .openURL: .openURL
@@ -160,6 +161,12 @@ struct ActionEditorSheet: View {
             DetailIntro(title: "输入文本", text: "以 Unicode 方式直接输入，不受当前输入法影响。可用于发送常用指令，例如「继续」。")
             CodeField(text: $text, placeholder: "要输入的文字", monospaced: false)
             Toggle("输入后按 ↩ 发送", isOn: $submit).toggleStyle(.checkbox).padding(.top, 4)
+        case .dictation:
+            DetailIntro(title: "语音输入", text: "用 Mac 的麦克风录音（也可以是 AirPods 或 USB 麦克风），在本机转成文字后输入到当前 App。麦克风与识别语言在「通用 › 语音输入」中设置。")
+            Toggle("识别完成后按 ↩ 发送", isOn: $submit).toggleStyle(.checkbox)
+            if case .button(_, let gesture) = context.target, gesture != .hold {
+                GestureHint(text: "绑定到「按住」最顺手：按下开始、松开结束。绑定到其它手势时，按一次开始、再按一次结束。")
+            }
         case .scroll:
             DetailIntro(title: "滚动", text: "按行滚动前台窗口，向下即显示下方内容。绑定到触控转动时，每转过一个步进滚动一次。")
             ScrollEditor(direction: $scrollDirection, lines: $scrollLines)
@@ -284,6 +291,7 @@ struct ActionEditorSheet: View {
         case .holdKey: return combo.map { bound(.holdKey($0)) }
         case .text: return text.isEmpty ? nil : bound(.text(text, submit: submit))
         case .scroll: return bound(.scroll(scrollDirection, lines: scrollLines))
+        case .dictation: return bound(.dictation(submit: submit))
         case .launchApp: return bundleID.isEmpty ? nil : bound(.launchApp(bundleID: bundleID))
         case .openURL:
             let trimmed = url.trimmingCharacters(in: .whitespaces)
@@ -321,6 +329,7 @@ struct ActionEditorSheet: View {
         case .holdKey(let value): kind = .holdKey; combo = value
         case .text(let value, let shouldSubmit): kind = .text; text = value; submit = shouldSubmit
         case .scroll(let direction, let lines): kind = .scroll; scrollDirection = direction; scrollLines = lines
+        case .dictation(let shouldSubmit): kind = .dictation; submit = shouldSubmit
         case .launchApp(let value): kind = .launchApp; bundleID = value
         case .openURL(let value): kind = .openURL; url = value
         case .shell(let value): kind = .shell; command = value

@@ -42,6 +42,11 @@ targets:
   # 官网版：Developer ID 签名 + 公证，功能完整
   RemoteMapper:
     templates: [RemoteMapperApp]
+    sources:
+      - path: build/Microphone
+        type: folder
+        buildPhase: resources
+        optional: true
     dependencies:
       - package: RemoteKit
         product: RemoteKit
@@ -60,12 +65,15 @@ targets:
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSAppleEventsUsageDescription: RemoteMapper 需要发送 Apple 事件来执行你绑定到遥控器上的 AppleScript。
-        NSBluetoothAlwaysUsageDescription: RemoteMapper 通过蓝牙读取 Siri Remote 的电量。
+        NSBluetoothAlwaysUsageDescription: RemoteMapper 通过蓝牙读取 Siri Remote 的电量与连接状态。
+        NSMicrophoneUsageDescription: 语音输入：按住遥控器上的键时用麦克风录音，并在本机转成文字。
+        NSSpeechRecognitionUsageDescription: 语音输入：在本机把你说的话转成文字。
         NSHumanReadableCopyright: ""
     entitlements:
       path: App/RemoteMapper.entitlements
       properties:
         com.apple.security.automation.apple-events: true
+        com.apple.security.device.audio-input: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ws.RemoteMapper
@@ -85,11 +93,14 @@ targets:
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSBluetoothAlwaysUsageDescription: RemoteMapper Lite 通过蓝牙读取 Siri Remote 的电量。
+        NSMicrophoneUsageDescription: 语音输入：按住遥控器上的键时用麦克风录音，并在本机转成文字。
+        NSSpeechRecognitionUsageDescription: 语音输入：在本机把你说的话转成文字。
         NSHumanReadableCopyright: ""
     entitlements:
       path: App/RemoteMapperLite.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        com.apple.security.device.audio-input: true
         com.apple.security.device.bluetooth: true
         com.apple.security.device.usb: true
         com.apple.security.files.user-selected.read-only: true

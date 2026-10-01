@@ -11,10 +11,11 @@ public enum KnownApp {
 /// 面向开发工具的预设动作。
 public struct Preset: Identifiable, Sendable {
     public enum Group: String, CaseIterable, Sendable {
-        case claudeCode, claudeDesktop, codex, system
+        case voice, claudeCode, claudeDesktop, codex, system
 
         public var displayName: String {
             switch self {
+            case .voice: "语音输入"
             case .claudeCode: "Claude Code · 终端"
             case .claudeDesktop: "Claude 桌面版"
             case .codex: "Codex"
@@ -37,6 +38,14 @@ public struct Preset: Identifiable, Sendable {
     public static func find(_ id: String) -> Preset? { all.first { $0.id == id } }
 
     public static let all: [Preset] = [
+        // 语音输入：本机识别，不依赖任何 App 自带的语音功能
+        Preset(id: "voice.dictation", group: .voice, title: "语音输入",
+               detail: "按住说话，松开后把识别出的文字输入到当前 App", symbol: "mic.fill",
+               action: .dictation(submit: false), preferredGesture: .hold),
+        Preset(id: "voice.dictationSubmit", group: .voice, title: "语音输入并发送",
+               detail: "按住说话，松开后输入文字并按 ↩ 发送", symbol: "paperplane.fill",
+               action: .dictation(submit: true), preferredGesture: .hold),
+
         // Claude Code：默认键位来自 https://code.claude.com/docs/en/keybindings
         Preset(id: "claudeCode.voice", group: .claudeCode, title: "按住说话",
                detail: "按住 Space 说话、松开结束，需先执行 /voice 开启",

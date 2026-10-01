@@ -1,0 +1,82 @@
+name: Full macOS Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_ANALYTICS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check release version and toolchain
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_NAME: ${{ github.ref_name }}
+        run: |
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          swift --version
+          version=$(awk -F'"' '/MARKETING_VERSION/ {print $2; exit}' project.yml)
+          if [[ "$RELEASE_REF" == refs/tags/* ]]; then
+            test "$RELEASE_NAME" = "v$version"
+          fi
+      - name: Install build dependencies
+        run: brew install xcodegen opus
+      - name: Test core library
+        run: make test
+      - name: Build and verify full Release package
+        run: bash scripts/release-cloud.sh
+      - name: Upload full build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RemoteMapper-full-macOS-arm64
+          path: |
+            build/release/cloud/*.dmg
+            build/release/cloud/*-Source.tar.gz
+            build/release/cloud/BUILD-INFO.txt
+            build/release/cloud/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish private repository Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cat > build/release/cloud/release-notes.md <<EOF
+          RemoteMapper 完整版，适用 Apple Silicon / macOS 26+。不构建 Lite 版。
+
+          下载 \`RemoteMapper-*-macOS-arm64.dmg\`，将 App 拖入「应用程序」。
+          包含按键映射、触控手势、Shell/AppleScript、语音输入与独立遥控器音频组件。
+
+          该自用包采用 ad-hoc 本地签名，未经 Apple 公证；首次打开可能需要在「系统设置 › 隐私与安全性」允许。
+          遥控器内置麦克风另需 Apple PacketLogger，音频组件安装由用户在 App 内授权。
+          云端验证包括核心测试、音频协议与驱动模拟测试、Release 编译、签名完整性和 DMG 校验；不代表实体遥控器实测。
+
+          构建提交：$GITHUB_SHA
+          构建记录：https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          附件包含音频组件对应源码（含 Opus）、构建信息与 SHA-256 校验和。
+          EOF
+          gh release create "$RELEASE_TAG" --verify-tag --title "RemoteMapper $RELEASE_TAG 完整版" \
+            --notes-file build/release/cloud/release-notes.md \
+            build/release/cloud/*.dmg build/release/cloud/*-Source.tar.gz \
+            build/release/cloud/BUILD-INFO.txt build/release/cloud/SHA256SUMS.txt

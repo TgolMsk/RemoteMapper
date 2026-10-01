@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import Observation
 import RemoteKit
@@ -68,10 +69,15 @@ struct EditorContext: Identifiable {
 
 @Observable
 final class AppModel {
-    static let shared: AppModel = ProcessInfo.processInfo.arguments.contains("--snapshot") ? .preview() : AppModel()
+    static let shared: AppModel = {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--snapshot") { return .preview() }
+        return AppModel(startsEngine: !args.contains("--microphone-check") && !args.contains("--transcription-check"))
+    }()
 
     let store: ConfigStore
     let engine: RemoteEngine
+    let microphoneBridge = MicrophoneBridge()
 
     var tab: SettingsTab = .mapping
     var mappingMode: MappingMode = .buttons
@@ -82,9 +88,11 @@ final class AppModel {
     var editor: EditorContext?
     var isSettingsKey = false
     private(set) var hasAccessibility = ActionRunner.hasAccessibility
+    private(set) var microphoneAccess = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     @ObservationIgnored private var permissionTimer: Timer?
+    @ObservationIgnored private var hud: DictationHUDController?
 
     init(store: ConfigStore = ConfigStore(), device: RemoteDevice = RemoteDevice(),
          touch: (any TouchSource)? = Edition.makeTouchSource(), startsEngine: Bool = true) {
@@ -116,6 +124,14 @@ final class AppModel {
         if startsEngine {
             engine.start()
             watchPermissions()
+            hud = DictationHUDController(model: self)
+            Task { [engine] in
+                // 绑定了语音输入而模型未下载时提前在后台下载，避免第一次使用时等待
+                await engine.dictation.refreshModelState()
+                if engine.store.config.usesDictation, engine.dictation.modelState == .notInstalled {
+                    await engine.dictation.installModel()
+                }
+            }
         }
     }
 
@@ -236,6 +252,8 @@ final class AppModel {
                     self.hasAccessibility = trusted
                     if trusted { self.engine.startInterceptorIfPossible() }
                 }
+                let microphone = AVCaptureDevice.authorizationStatus(for: .audio)
+                if microphone != self.microphoneAccess { self.microphoneAccess = microphone }
             }
         }
     }

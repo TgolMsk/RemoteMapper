@@ -298,3 +298,58 @@ final class ManualClock: GestureClock {
         #expect(try JSONDecoder().decode(Action.self, from: Data(json.utf8)) == .scroll(.down, lines: 3))
     }
 }
+
+@Suite struct VoiceTests {
+    @Test func dictationActionIsReadable() throws {
+        let json = String(data: try JSONEncoder().encode(Action.dictation(submit: true)), encoding: .utf8)!
+        #expect(json.contains("\"type\":\"dictation\""))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(json.utf8)) == .dictation(submit: true))
+        let plain = try JSONDecoder().decode(Action.self, from: Data(#"{"type":"dictation"}"#.utf8))
+        #expect(plain == .dictation(submit: false))
+    }
+
+    @Test func siriHoldDictatesByDefault() {
+        let config = RemoteConfig.default
+        #expect(config.resolve(.siri, frontmost: nil)?.mapping.hold?.action == .dictation(submit: false))
+        #expect(config.resolve(.siri, frontmost: KnownApp.iTerm)?.mapping.hold?.presetID == "voice.dictation")
+    }
+
+    @Test func voiceSettingsDefaultsAndFollowSystem() throws {
+        let missing = try JSONDecoder().decode(RemoteConfig.self, from: Data("{}".utf8))
+        #expect(missing.voice.localeIdentifier == "zh-CN")
+        #expect(missing.voice.showsHUD)
+        #expect(missing.voice.usesRemoteMicrophone)
+        #expect(missing.voice.captureDeviceUID == AudioInputDevices.remoteMicrophoneUID)
+
+        var config = RemoteConfig.default
+        config.voice.localeIdentifier = nil
+        let decoded = try JSONDecoder().decode(RemoteConfig.self, from: JSONEncoder().encode(config))
+        #expect(decoded.voice.localeIdentifier == nil)
+    }
+
+    @Test func preservesExplicitMicrophoneFromOlderConfig() throws {
+        let older = try JSONDecoder().decode(VoiceSettings.self, from: Data(#"{"inputDeviceUID":"USB-Mic"}"#.utf8))
+        #expect(!older.usesRemoteMicrophone)
+        #expect(older.captureDeviceUID == "USB-Mic")
+        let system = VoiceSettings(usesRemoteMicrophone: false)
+        #expect(system.captureDeviceUID == nil)
+        #expect(try JSONDecoder().decode(VoiceSettings.self, from: JSONEncoder().encode(system)) == system)
+    }
+
+    @Test func missingRemoteNeverFallsBackToAnotherMicrophone() {
+        let usb = AudioInputDevice(id: 123, uid: "USB-Mic", name: "USB")
+        #expect(throws: DictationError.self) {
+            try AudioInputDevices.resolve(uid: AudioInputDevices.remoteMicrophoneUID, devices: [usb], defaultInput: usb)
+        }
+        #expect(throws: DictationError.self) {
+            try AudioInputDevices.resolve(uid: "Disconnected", devices: [usb], defaultInput: usb)
+        }
+    }
+
+    @Test func selectsExactRemoteInput() throws {
+        let remote = AudioInputDevice(id: 123, uid: AudioInputDevices.remoteMicrophoneUID, name: "Siri Remote Mic")
+        let usb = AudioInputDevice(id: 124, uid: "USB-Mic", name: "USB")
+        #expect(try AudioInputDevices.resolve(uid: remote.uid, devices: [usb, remote], defaultInput: usb) == remote)
+        #expect(try AudioInputDevices.resolve(uid: nil, devices: [usb, remote], defaultInput: usb) == usb)
+    }
+}

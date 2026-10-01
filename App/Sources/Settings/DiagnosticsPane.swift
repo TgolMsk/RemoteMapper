@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import RemoteKit
 import SwiftUI
@@ -14,6 +15,7 @@ struct DiagnosticsPane: View {
                                   symbol: "accessibility",
                                   granted: model.hasAccessibility,
                                   action: model.requestAccessibility)
+                    MicrophonePermissionRow()
                     SettingRow(title: "自动化（Apple 事件）",
                                detail: "仅在执行 AppleScript 控制其它 App 时，由系统按需询问。",
                                symbol: "applescript", showsDivider: false) {
@@ -227,6 +229,29 @@ struct BatteryRow: View {
         case .reading: "读取中…"
         case .available: "—"
         case .failed(let message): message
+        }
+    }
+}
+
+struct MicrophonePermissionRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        SettingRow(title: "麦克风", detail: "语音输入时录音，识别在本机完成。", symbol: "mic") {
+            switch model.microphoneAccess {
+            case .authorized:
+                Label("已授权", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.live)
+            case .notDetermined:
+                Text("首次使用时询问").font(.system(size: 12)).foregroundStyle(.secondary)
+            default:
+                Button("前往授权") {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.warning)
+            }
         }
     }
 }

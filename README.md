@@ -23,6 +23,18 @@ make install    # Release 版安装到 /Applications（开机自启需要从这�
 
 依赖：Xcode 27、macOS 26、[XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`）。
 
+## 云端完整版下载
+
+[GitHub Releases](https://github.com/TgolMsk/RemoteMapper/releases) 提供 Apple Silicon / macOS 26+
+的完整版 DMG（私有仓库需登录有访问权限的 GitHub 帐户）。下载后将 App 拖入「应用程序」。
+云端自用构建采用 ad-hoc 本地签名，未经 Apple 公证；首次打开如被拦截，在「系统设置 ›
+隐私与安全性」中允许打开。Developer ID 签名和公证仍使用 `make dist` 的本机流程。
+
+推送与 `MARKETING_VERSION` 一致的 `v版本号` 标签会触发 `Full macOS Release`，在 macOS 26 / Xcode 26.6
+上运行核心测试、音频组件模拟验证并打包，只构建 `RemoteMapper` 完整版。
+手动运行该工作流可下载 Actions 附件，不会创建 Release。附件包含音频组件对应源码、
+Opus 源码、构建提交及 SHA-256 校验和。云端测试不替代实体遥控器的按键、录音与听写实测。
+
 首次运行需要在「系统设置 › 隐私与安全性 › 辅助功能」中授权 RemoteMapper，否则无法模拟按键。
 
 ## 功能
@@ -52,4 +64,33 @@ project.yml             XcodeGen 工程描述
 
 Siri Remote（VID `0x004C` / PID `0x0315`）通过 BLE 连接，按键走 Consumer Control 接口的报告 `0xFB`：13 个 1 位字段，顺序为 TV、音量+、音量−、触控板按下、电源、Siri、返回、静音、播放/暂停、上、右、下、左。该顺序取自设备的报告描述符，可在「权限与诊断 › 按键位图」中实时核对。
 
-触控面由系统注册为多点触控设备，通过私有框架 MultitouchSupport 读取触点（与 Mac 触控板同一套驱动），因此不能上架 App Store，系统大版本更新后可能需要适配。运动传感器、麦克风是 Apple 私有格式，尚未解析。
+触控面由系统注册为多点触控设备，通过私有框架 MultitouchSupport 读取触点（与 Mac 触控板同一套驱动），因此不能上架 App Store，系统大版本更新后可能需要适配。
+
+## 遥控器麦克风接入 macOS
+
+官网版「通用 › 语音输入」选择「遥控器麦克风」，点击「安装并设为系统输入」。安装需要
+管理员授权，会短暂重启系统音频；安装后 macOS 和其他 App 的音频输入列表中出现
+**Siri Remote Mic**。按住实体 Siri 键说话，松开后静音。应用内听写也使用同一输入，
+不会在遥控器缺失时自动录制其他麦克风。
+
+需 macOS 26、已配对的第三代 USB-C Siri Remote（PID `0x0315`），以及 Apple
+[Additional Tools for Xcode](https://developer.apple.com/download/all/) 中的 PacketLogger，
+安装到 `/Applications/PacketLogger.app`。本机开发还需 `brew install opus`。音频通过
+PacketLogger 实时蓝牙记录 → ATT 分片重组 → Opus 解码 → 48 kHz 单声道共享缓冲 →
+CoreAudio HAL 输入驱动传递；依赖未公开的蓝牙格式，系统或遥控器固件更新后需重新验证。
+按需采集启动有延迟，首次使用等输入有反应后再开始说话。
+
+只有输入设备正在使用时，独立服务才启用蓝牙实时记录；停止采集后删除临时文件，并
+恢复 `HCITraces` 原值。临时蓝牙记录仅 root 可读，限制为 32 MiB。安装会观察 25 秒
+`coreaudiod` 负载，异常则自动恢复旧组件。App Store 版不携带安装服务，能使用已安装
+的标准 CoreAudio 输入。
+
+```bash
+make mic-build      # 解码、分片重组、驱动属性与实时缓冲模拟验证
+make mic-install    # 单独安装音频组件（sudo）
+make mic-uninstall  # 卸载并恢复蓝牙调试设置
+```
+
+独立音频组件源码与来源说明见 [AudioBridge/NOTICE.md](AudioBridge/NOTICE.md)，构建在
+`build/Microphone`，测试记录在 `build/MicrophoneTests`。模拟测试不代表实体遥控器录音通过；
+实机验证必须从 CoreAudio 输入录到非静音语音，并核对松键后静音和采集停止。

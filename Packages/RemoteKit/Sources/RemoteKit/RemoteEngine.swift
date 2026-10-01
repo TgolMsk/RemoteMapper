@@ -30,6 +30,7 @@ public final class RemoteEngine {
     /// 官网版为 MultitouchSupport 触控面；App Store 版为 nil
     public let touch: (any TouchSource)?
     public let battery: BatteryMonitor
+    public let dictation = VoiceDictation()
     public let store: ConfigStore
     @ObservationIgnored public let runner = ActionRunner()
     @ObservationIgnored public let interceptor = MediaKeyInterceptor()
@@ -59,6 +60,8 @@ public final class RemoteEngine {
         self.touch = touch
         self.battery = battery
         touchRecognizer.settings = store.config.touch
+        runner.dictation = dictation
+        dictation.settings = store.config.voice
         gestures = GestureEngine(timing: store.config.gestureTiming) { [unowned self] button in
             guard let mapping = self.store.config.resolve(button, frontmost: self.pressFrontmost[button])?.mapping else {
                 return .init(gestures: [])
@@ -116,6 +119,7 @@ public final class RemoteEngine {
     public func configDidChange() {
         gestures.timing = store.config.gestureTiming
         touchRecognizer.settings = store.config.touch
+        if dictation.settings != store.config.voice { dictation.settings = store.config.voice }
         if !store.config.isEnabled {
             gestures.reset()
             runner.endAll()

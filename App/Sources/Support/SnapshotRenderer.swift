@@ -22,6 +22,9 @@ enum SnapshotRenderer {
             }
 
             let appModel = AppModel.preview(pressed: [])
+            render(VoiceSettingsGroup().environment(appModel).padding(24)
+                .background(Color(nsColor: .windowBackgroundColor)), size: CGSize(width: 790, height: 640),
+                   appearance: appearance, to: directory.appending(path: "voice-settings-\(suffix).png"))
             appModel.selectedProfileID = appModel.config.profiles.first { !$0.isGlobal }!.id
             appModel.selectedButton = .playPause
             render(SettingsView().environment(appModel), size: size, appearance: appearance,
@@ -49,6 +52,19 @@ enum SnapshotRenderer {
                 let context = EditorContext(profileID: profileID, target: target)
                 render(ActionEditorSheet(context: context).environment(model), size: CGSize(width: 760, height: 600),
                        appearance: appearance, to: directory.appending(path: "editor-\(name)-\(suffix).png"))
+            }
+
+            // 语音输入浮窗：识别中、出错两种状态
+            for (name, phase, text, level) in [("listening", VoiceDictation.Phase.listening, "帮我把这个函数改成异步的，并补上单元测试", Float(0.7)),
+                                               ("failed", .failed("没有可用的麦克风：请连接 AirPods、耳机或 USB 麦克风"), "", 0)] {
+                let model = AppModel.preview()
+                model.engine.dictation.simulate(phase: phase, transcript: text, level: level)
+                // 让波形有历史数据可画
+                for step in 0..<16 { model.engine.dictation.simulate(phase: phase, transcript: text, level: level * Float(0.3 + 0.7 * abs(sin(Double(step) * 0.9)))) }
+                render(DictationHUDView().environment(model).frame(width: 620, height: 132, alignment: .bottom)
+                    .background(LinearGradient(colors: [Color(white: 0.55), Color(white: 0.35)], startPoint: .top, endPoint: .bottom)),
+                       size: CGSize(width: 620, height: 132), appearance: appearance,
+                       to: directory.appending(path: "hud-\(name)-\(suffix).png"))
             }
 
             render(MenuBarPanel().environment(AppModel.preview()).fixedSize()

@@ -8,7 +8,7 @@ XCODEBUILD := xcodebuild -project RemoteMapper.xcodeproj -scheme RemoteMapper -d
 project:            ## 由 project.yml 生成 Xcode 工程
 	xcodegen generate
 
-build: project      ## 编译 Debug 版
+build: mic-build project      ## 编译 Debug 版
 	$(XCODEBUILD) -configuration Debug build -quiet
 
 build-lite: project ## 编译 App Store 版（沙盒）
@@ -43,7 +43,7 @@ icon:               ## 重新绘制 App 图标
 probe:              ## 运行原始 HID 探针，打印遥控器的原始报告
 	swift Tools/RemoteProbe.swift
 
-release: project    ## 编译 Release 版
+release: mic-build project    ## 编译 Release 版
 	$(XCODEBUILD) -configuration Release build -quiet
 
 install: release    ## 安装到 /Applications（开机启动需要从这里运行）
@@ -60,3 +60,13 @@ appstore:           ## App Store 版：归档并导出上传用安装包
 
 clean:
 	rm -rf build
+
+.PHONY: mic-build mic-install mic-uninstall
+mic-build:          ## 构建并验证独立遥控器音频组件（需要 Opus）
+	scripts/build-microphone.sh
+
+mic-install: mic-build ## 安装系统音频输入与按需采集服务（需要管理员权限）
+	sudo /bin/bash build/Microphone/install.sh
+
+mic-uninstall:      ## 移除系统音频组件并恢复蓝牙调试设置
+	sudo /bin/bash "/Library/Application Support/RemoteMapperMicrophone/uninstall.sh"

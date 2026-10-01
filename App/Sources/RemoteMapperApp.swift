@@ -39,6 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SnapshotRenderer.renderAll(to: URL(fileURLWithPath: arguments[index + 1]))
             exit(0)
         }
+        if let index = arguments.firstIndex(of: "--microphone-check"), arguments.indices.contains(index + 2) {
+            let seconds = min(60, max(3, Int(arguments[index + 1]) ?? 20))
+            let output = URL(fileURLWithPath: arguments[index + 2])
+            Task { exit(await MicrophoneCheck.run(seconds: seconds, output: output)) }
+        }
+        if let index = arguments.firstIndex(of: "--transcription-check"), arguments.indices.contains(index + 1) {
+            let input = URL(fileURLWithPath: arguments[index + 1])
+            Task { exit(await MicrophoneCheck.transcribe(input)) }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
