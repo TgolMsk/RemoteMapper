@@ -1,0 +1,28 @@
+# RemoteMapper
+
+macOS 菜单栏 App，把 Siri Remote 的按键映射为开发工具（Claude Code、Claude 桌面版、Codex 等）的动作。
+
+## 命令
+
+- `make build` / `make run`：XcodeGen 生成工程后编译（`*.xcodeproj` 不入库，改 `project.yml`）
+- `make test`：核心库测试（Swift Testing），改 `Packages/RemoteKit` 后必跑
+- `make snapshot`：把所有界面（深色/浅色）渲染为 PNG 到 `build/snapshots`，改 UI 后用它做视觉自检，不需要屏幕录制权限
+
+## 架构
+
+- `Packages/RemoteKit`：与 UI 无关的核心。`RemoteDevice`（IOHIDManager 读报告 0xFB）→ `GestureEngine`（单击/双击/长按/按住）→ `RemoteEngine`（按前台 App 解析配置）→ `ActionRunner`（CGEvent、NSWorkspace、子进程）。`MediaKeyInterceptor` 用 CGEventTap 拦截被映射的媒体键。
+- `App/Sources`：SwiftUI。`AppModel` 持有 `ConfigStore` 与 `RemoteEngine`；`AppModel.preview()` 提供截图用的假数据。
+- 两个 target 都开启了默认 MainActor 隔离；IOKit / CGEventTap 的 C 回调写成 `nonisolated` 全局函数，指针以地址形式传入后 `MainActor.assumeIsolated`。
+
+## 约定
+
+- 代码注释、界面文案使用简体中文。
+- 新的开发工具绑定优先加到 `Presets.swift`，默认映射在 `RemoteConfig.default`。
+- 配置 JSON 需保持可手写：`Action` 用 `type` 区分，`KeyCombo` 编码为 `{"key": "tab", "modifiers": ["shift"]}`。
+- 设计规范集中在 `App/Sources/Design/Theme.swift`；舞台区域始终是深色。
+
+## 待验证
+
+- 按键位序是从报告描述符推断的，需按实体遥控器核对（诊断页的按键位图）。
+- 遥控器的音量/播放键在 macOS 上是否以 NX_SYSDEFINED 媒体键事件出现（决定拦截是否生效）。
+- Siri 键在 macOS 上是否触发系统 Siri / 听写。

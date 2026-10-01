@@ -1,0 +1,62 @@
+import AppKit
+import RemoteKit
+import SwiftUI
+
+/// 以 `--snapshot <目录>` 启动时，把各界面渲染成 PNG 后退出，用于不依赖屏幕录制权限的视觉自检。
+enum SnapshotRenderer {
+    static func renderAll(to directory: URL) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let size = SettingsWindow.size
+
+        for appearance in [NSAppearance.Name.darkAqua, .aqua] {
+            let suffix = appearance == .darkAqua ? "dark" : "light"
+            for tab in SettingsTab.allCases {
+                let model = AppModel.preview()
+                model.tab = tab
+                render(SettingsView().environment(model), size: size, appearance: appearance,
+                       to: directory.appending(path: "settings-\(tab.rawValue)-\(suffix).png"))
+            }
+
+            let appModel = AppModel.preview(pressed: [])
+            appModel.selectedProfileID = appModel.config.profiles.first { !$0.isGlobal }!.id
+            appModel.selectedButton = .playPause
+            render(SettingsView().environment(appModel), size: size, appearance: appearance,
+                   to: directory.appending(path: "settings-appprofile-\(suffix).png"))
+
+            let pressedModel = AppModel.preview(pressed: [.up, .tv])
+            pressedModel.selectedButton = .up
+            render(SettingsView().environment(pressedModel), size: size, appearance: appearance,
+                   to: directory.appending(path: "settings-pressed-\(suffix).png"))
+
+            for (name, button, gesture) in [("preset", RemoteButton.siri, RemoteGesture.hold), ("keystroke", .playPause, .tap)] {
+                let model = AppModel.preview()
+                let terminal = model.config.profiles.first { !$0.isGlobal }!.id
+                let context = EditorContext(profileID: terminal, button: button, gesture: gesture)
+                render(ActionEditorSheet(context: context).environment(model), size: CGSize(width: 760, height: 600),
+                       appearance: appearance, to: directory.appending(path: "editor-\(name)-\(suffix).png"))
+            }
+
+            render(MenuBarPanel().environment(AppModel.preview()).fixedSize()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background(Color(nsColor: .windowBackgroundColor)), size: CGSize(width: 300, height: 230),
+                   appearance: appearance, to: directory.appending(path: "menubar-\(suffix).png"))
+        }
+    }
+
+    private static func render(_ view: some View, size: CGSize, appearance: NSAppearance.Name, to url: URL) {
+        let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: -20000, y: -20000), size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: appearance)
+        let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
+        host.frame = CGRect(origin: .zero, size: size)
+        window.contentView = host
+        window.orderFrontRegardless()
+        host.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        window.orderOut(nil)
+    }
+}
