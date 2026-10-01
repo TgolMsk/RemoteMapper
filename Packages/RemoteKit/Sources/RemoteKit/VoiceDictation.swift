@@ -27,6 +27,8 @@ public final class VoiceDictation {
     }
 
     public private(set) var phase: Phase = .idle
+    /// 本次录音是否在松开遥控器按键时结束（按住、长按）；否则要再按一次（单击、双击）
+    public var endsOnRelease = true
     /// 输入音量 0...1
     public private(set) var level: Float = 0
     /// 已确定的文字加上正在识别中的文字

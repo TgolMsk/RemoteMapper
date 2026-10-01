@@ -61,6 +61,11 @@ public final class ActionRunner {
         holds[button] = KeyboardSynth.beginHold(combo)
     }
 
+    /// 实体按键松开：由长按开始的语音输入在这里结束（长按触发时手指仍按着键，应当松开即结束）
+    public func buttonReleased(_ button: RemoteButton) {
+        if dictationOwner == button { finishDictation() }
+    }
+
     public func end(for button: RemoteButton) {
         holds.removeValue(forKey: button)?.end()
         if dictationOwner == button { finishDictation() }
@@ -169,6 +174,7 @@ public final class ActionRunner {
         }
         dictationOwner = owner
         dictationSubmit = submit
+        dictation.endsOnRelease = owner != nil
         dictation.start()
     }
 

@@ -134,7 +134,7 @@ struct DictationHUDView: View {
     private func headline(_ phase: VoiceDictation.Phase) -> String {
         switch phase {
         case .starting: "准备中"
-        case .listening: "正在聆听 · 松开遥控器结束"
+        case .listening: model.engine.dictation.endsOnRelease ? "正在聆听 · 松开遥控器结束" : "正在聆听 · 再按一次结束"
         case .finishing: "正在识别"
         case .failed: "语音输入不可用"
         case .idle: ""

@@ -238,6 +238,7 @@ public extension RemoteConfig {
 
     /// 鼠标模式的默认映射：侧面 Siri 键单击为确定（左键单击）、双击在光标与滚轮之间切换；
     /// 按下触控板为左键（可双击、按住可拖动），返回键为右键。
+    /// 触控板四周按下在系统里是方向键，鼠标模式下拇指常停在右侧滚动区或外圈，所以四周按下也当左键。
     /// 触控面只支持单指，拇指在触控面上时按不到其它键，所以滚轮用开关而不是按住
     static var defaultPointerProfile: Profile {
         func preset(_ id: String) -> BoundAction { Preset.find(id)!.bound }
@@ -245,6 +246,10 @@ public extension RemoteConfig {
         confirm.title = "确定"
         return Profile(name: "鼠标模式", isPointerMode: true, mappings: [
             .select: ButtonMapping(hold: preset("mouse.left")),
+            .up: ButtonMapping(hold: preset("mouse.left")),
+            .down: ButtonMapping(hold: preset("mouse.left")),
+            .left: ButtonMapping(hold: preset("mouse.left")),
+            .right: ButtonMapping(hold: preset("mouse.left")),
             .siri: ButtonMapping(tap: confirm, doubleTap: preset("mouse.scrollToggle")),
             .back: ButtonMapping(tap: preset("mouse.right")),
         ])

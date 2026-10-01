@@ -169,6 +169,7 @@ public final class RemoteEngine {
             append(button: button, gesture: nil, title: "未映射 · 系统默认", kind: .passthrough)
         }
         gestures.handle(button, isDown: isDown)
+        if !isDown { runner.buttonReleased(button) }
     }
 
     private func handle(_ output: GestureOutput) {
@@ -179,7 +180,12 @@ public final class RemoteEngine {
                 append(button: button, gesture: gesture, title: bound.displayTitle, kind: .preview)
                 return
             }
-            runner.perform(bound.action)
+            if gesture == .longPress, case .dictation = bound.action {
+                // 长按触发时键还按着：按「按住」的方式开始，松开即结束
+                runner.begin(bound.action, for: button)
+            } else {
+                runner.perform(bound.action)
+            }
             // 连续触发的方向键不逐条记录
             if log.first?.button != button || log.first?.gesture != gesture || Date().timeIntervalSince(log.first!.date) > 0.5 {
                 append(button: button, gesture: gesture, title: bound.displayTitle, kind: .action)

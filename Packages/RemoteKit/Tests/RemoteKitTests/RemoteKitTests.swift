@@ -690,6 +690,10 @@ final class RecordingPointerOutput: PointerOutput {
         #expect(pointer.mapping(for: .siri)?.tap?.displayTitle == "确定")
         #expect(pointer.mapping(for: .siri)?.doubleTap?.action == .pointerScroll)
         #expect(pointer.mapping(for: .select)?.hold?.action == .mouseButton(.left))
+        // 触控板四周按下也是左键，不再继承方向键
+        for edge in [RemoteButton.up, .down, .left, .right] {
+            #expect(pointer.mapping(for: edge)?.hold?.action == .mouseButton(.left))
+        }
         #expect(pointer.mapping(for: .back)?.tap?.action == .mouseButton(.right))
         #expect(pointer.mapping(for: .mute) == nil)
         #expect(config.globalProfile.isGlobal && config.profiles.filter(\.isGlobal).count == 1)
