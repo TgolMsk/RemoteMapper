@@ -93,6 +93,7 @@ final class AppModel {
 
     @ObservationIgnored private var permissionTimer: Timer?
     @ObservationIgnored private var hud: DictationHUDController?
+    @ObservationIgnored private var modeToast: PointerModeToast?
 
     init(store: ConfigStore = ConfigStore(), device: RemoteDevice = RemoteDevice(),
          touch: (any TouchSource)? = Edition.makeTouchSource(), startsEngine: Bool = true) {
@@ -104,8 +105,8 @@ final class AppModel {
         store.onChange = { [weak self] _ in self?.engine.configDidChange() }
         engine.isPreviewOnly = { [weak self] in self?.isSettingsKey ?? false }
         engine.onButtonDown = { [weak self] button in
-            // 设置窗口在前台时，按遥控器上的键即可直接选中它
-            guard let self, self.isSettingsKey else { return }
+            // 设置窗口在前台时，按遥控器上的键即可直接选中它；鼠标模式下按键多半是在点击，不跳转
+            guard let self, self.isSettingsKey, !self.config.isPointerModeActive else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                 self.tab = .mapping
                 self.mappingMode = .buttons
@@ -125,6 +126,7 @@ final class AppModel {
             engine.start()
             watchPermissions()
             hud = DictationHUDController(model: self)
+            if Edition.supportsTouch { modeToast = PointerModeToast(model: self) }
             Task { [engine] in
                 // 绑定了语音输入而模型未下载时提前在后台下载，避免第一次使用时等待
                 await engine.dictation.refreshModelState()
@@ -146,9 +148,10 @@ final class AppModel {
         config[selectedProfileID] ?? config.globalProfile
     }
 
-    /// 当前前台 App 下实际生效的配置
+    /// 当前实际生效的配置：鼠标模式优先，其次是前台 App 的专属配置
     var activeProfile: Profile {
-        config.appProfile(for: engine.frontmostBundleID) ?? config.globalProfile
+        if Edition.supportsTouch, config.isPointerModeActive, let pointer = config.pointerProfile { return pointer }
+        return config.appProfile(for: engine.frontmostBundleID) ?? config.globalProfile
     }
 
     func mapping(_ button: RemoteButton, in profileID: UUID) -> ButtonMapping? {
@@ -219,6 +222,8 @@ final class AppModel {
     }
 
     func deleteProfile(_ id: UUID) {
+        // 鼠标模式配置没有重新添加的入口，不允许删除
+        guard config[id]?.isPointerMode != true else { return }
         config[id] = nil
         selectedProfileID = config.globalProfile.id
     }

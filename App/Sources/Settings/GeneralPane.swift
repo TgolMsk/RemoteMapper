@@ -36,15 +36,53 @@ struct GeneralPane: View {
 
                 if Edition.supportsTouch {
                 SettingsGroup("触控") {
-                    SettingRow(title: "启用触控手势", detail: "在遥控器触控板上滑动或沿外圈转动来触发动作。", symbol: "hand.draw") {
-                        Toggle("启用触控手势", isOn: $model.config.touch.isEnabled).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+                    SettingRow(title: "启用触控", detail: "关闭后触控板既不触发手势，也不移动光标。", symbol: "hand.draw") {
+                        Toggle("启用触控", isOn: $model.config.touch.isEnabled).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
                     }
-                    TimingSlider(title: "滑动距离", detail: "手指移动超过触控面的这个比例才算滑动。数值越小越灵敏，也越容易误触。",
-                                 value: $model.config.touch.swipeDistance, range: 0.15...0.6, tint: Theme.accent,
-                                 format: { String(format: "%.0f%%", $0 * 100) })
-                    TimingSlider(title: "转动步进", detail: "沿外圈每转过这个角度触发一次。绑定滚动时，数值越小滚得越快。",
-                                 value: $model.config.touch.rotationStep, range: 10...90, tint: Theme.live, showsDivider: false,
-                                 format: { String(format: "%.0f°", $0) }, step: 5)
+                    SettingRow(title: "触控板用途",
+                               detail: model.config.touch.mode == .pointer
+                                   ? "单指移动光标，右侧上下滑或沿外圈转动即滚动；侧面 Siri 键单击为确定、双击切换为整面滚轮。按键可在映射页的「鼠标模式」配置中修改。"
+                                   : "滑动或沿外圈转动来触发映射的动作。",
+                               symbol: model.config.touch.mode == .pointer ? "cursorarrow.motionlines" : "hand.point.up.left") {
+                        Picker("触控板用途", selection: $model.config.touch.mode) {
+                            ForEach(TouchMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    }
+                    if model.config.touch.mode == .pointer {
+                        TimingSlider(title: "光标速度", detail: "手指慢时精细定位，快时一次划得更远。滚轮的速度也随之变化。",
+                                     value: $model.config.touch.pointerSpeed, range: 0.3...3, tint: Theme.accent,
+                                     format: { String(format: "%.1f×", $0) }, step: 0.1)
+                        SettingRow(title: "右侧滚动区", detail: "在触控板右侧上下滑动即滚动，内容跟着手指走，松手后带惯性；横着划仍是移动光标。",
+                                   symbol: "arrow.up.and.down.square") {
+                            Toggle("右侧滚动区", isOn: $model.config.touch.sideScroll).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+                        }
+                        if model.config.touch.sideScroll {
+                            TimingSlider(title: "滚动区宽度", detail: "占触控板宽度的比例，左边其余部分移动光标。",
+                                         value: $model.config.touch.sideScrollWidth, range: 0.2...0.45, tint: Theme.live,
+                                         format: { String(format: "%.0f%%", $0 * 100) }, step: 0.01)
+                        }
+                        SettingRow(title: "外圈转动滚动", detail: "沿触控板外圈顺时针转动向下滚动、逆时针向上，从右侧滚动区起手时按滚动区处理。",
+                                   symbol: "arrow.clockwise.circle") {
+                            Toggle("外圈转动滚动", isOn: $model.config.touch.ringScroll).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+                        }
+                        if model.config.touch.ringScroll {
+                            TimingSlider(title: "外圈宽度", detail: "越窄，中间移动光标的区域越大；从外圈往里划仍是移动光标，只有沿圆周转动才滚动。",
+                                         value: $model.config.touch.ringWidth, range: 0.06...0.2, tint: Theme.live,
+                                         format: { String(format: "%.1f mm", $0 * 27.8) }, step: 0.01)
+                        }
+                        SettingRow(title: "轻点点按", detail: "轻点触控板即左键单击。关闭时只有绑定的按键会点击。",
+                                   symbol: "hand.tap", showsDivider: false) {
+                            Toggle("轻点点按", isOn: $model.config.touch.tapToClick).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+                        }
+                    } else {
+                        TimingSlider(title: "滑动距离", detail: "手指移动超过触控面的这个比例才算滑动。数值越小越灵敏，也越容易误触。",
+                                     value: $model.config.touch.swipeDistance, range: 0.15...0.6, tint: Theme.accent,
+                                     format: { String(format: "%.0f%%", $0 * 100) })
+                        TimingSlider(title: "转动步进", detail: "沿外圈每转过这个角度触发一次。绑定滚动时，数值越小滚得越快。",
+                                     value: $model.config.touch.rotationStep, range: 10...90, tint: Theme.live, showsDivider: false,
+                                     format: { String(format: "%.0f°", $0) }, step: 5)
+                    }
                 }
                 }
 

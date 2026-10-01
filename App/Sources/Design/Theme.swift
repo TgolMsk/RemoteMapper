@@ -28,6 +28,7 @@ enum Theme {
     static func tint(for group: Preset.Group?) -> Color {
         switch group {
         case .voice: Color(.sRGB, red: 0.93, green: 0.36, blue: 0.47)
+        case .mouse: Color(.sRGB, red: 0.20, green: 0.58, blue: 0.92)
         case .claudeCode: accent
         case .claudeDesktop: Color(.sRGB, red: 0.85, green: 0.47, blue: 0.34)
         case .codex: Color(.sRGB, red: 0.16, green: 0.66, blue: 0.58)

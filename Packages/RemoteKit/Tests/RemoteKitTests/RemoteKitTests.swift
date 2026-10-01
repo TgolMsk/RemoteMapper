@@ -441,3 +441,423 @@ final class ManualClock: GestureClock {
         #expect(DotCall.primaryDotName(fromGlobalState: Data("{}".utf8)) == nil)
     }
 }
+
+/// 记录触控鼠标输出的事件，代替真实的 CGEvent
+final class RecordingPointerOutput: PointerOutput {
+    enum Event: Equatable {
+        case move(dx: Double, dy: Double, dragging: MouseButton?)
+        case button(MouseButton, down: Bool, clicks: Int)
+        case scroll(dx: Double, dy: Double, phase: ScrollPhase)
+    }
+    var events: [Event] = []
+    func move(dx: Double, dy: Double, dragging: MouseButton?) { events.append(.move(dx: dx, dy: dy, dragging: dragging)) }
+    func button(_ button: MouseButton, isDown: Bool, clickCount: Int) { events.append(.button(button, down: isDown, clicks: clickCount)) }
+    func scroll(dx: Double, dy: Double, phase: ScrollPhase) { events.append(.scroll(dx: dx, dy: dy, phase: phase)) }
+
+    var moves: [(dx: Double, dy: Double, dragging: MouseButton?)] {
+        events.compactMap { if case .move(let x, let y, let d) = $0 { (x, y, d) } else { nil } }
+    }
+    var scrolls: [(dx: Double, dy: Double, phase: ScrollPhase)] {
+        events.compactMap { if case .scroll(let x, let y, let p) = $0 { (x, y, p) } else { nil } }
+    }
+}
+
+@Suite struct TouchPointerTests {
+    private func frame(_ x: Double, _ y: Double, at t: TimeInterval, id: Int32 = 1) -> TouchFrame {
+        TouchFrame(contacts: [TouchContact(id: id, state: 4, x: x, y: y)], timestamp: t)
+    }
+    private let lift = { (t: TimeInterval) in TouchFrame(contacts: [], timestamp: t) }
+
+    private func makePointer(tapToClick: Bool = false, clock: ManualClock = ManualClock()) -> (TouchPointer, RecordingPointerOutput) {
+        let output = RecordingPointerOutput()
+        var time = 100.0
+        let pointer = TouchPointer(settings: TouchSettings(mode: .pointer, tapToClick: tapToClick), output: output,
+                                   now: { time += 0.1; return time }, clock: clock)
+        pointer.doubleClickInterval = 0.5
+        return (pointer, output)
+    }
+
+    @Test func movesCursorWithFinger() {
+        let (pointer, output) = makePointer()
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        #expect(output.events.isEmpty)
+        pointer.handle(frame(0.55, 0.5, at: 0.015))
+        pointer.handle(frame(0.55, 0.56, at: 0.03))
+        let moves = output.moves
+        #expect(moves.count == 2)
+        #expect(moves[0].dx > 0 && moves[0].dy == 0)
+        // 触控面 y 向上，屏幕 y 向下
+        #expect(moves[1].dx == 0 && moves[1].dy < 0)
+        #expect(moves.allSatisfy { $0.dragging == nil })
+    }
+
+    @Test func fastMovementTravelsFurther() {
+        let (slow, slowOut) = makePointer()
+        slow.handle(frame(0.5, 0.5, at: 0))
+        slow.handle(frame(0.55, 0.5, at: 0.2))
+        let (fast, fastOut) = makePointer()
+        fast.handle(frame(0.5, 0.5, at: 0))
+        fast.handle(frame(0.55, 0.5, at: 0.01))
+        #expect(fastOut.moves[0].dx > slowOut.moves[0].dx * 2)
+    }
+
+    @Test func slowMovementAccumulatesSubpixels() {
+        let (pointer, output) = makePointer()
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        // 每帧不足一个像素，累积后仍应移动
+        for step in 1...20 { pointer.handle(frame(0.5 + Double(step) * 0.0005, 0.5, at: Double(step) * 0.05)) }
+        #expect(output.moves.reduce(0) { $0 + $1.dx } >= 5)
+    }
+
+    @Test func dragsWhileButtonHeld() {
+        let (pointer, output) = makePointer()
+        pointer.press(.left)
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        pointer.handle(frame(0.6, 0.5, at: 0.02))
+        pointer.release(.left)
+        #expect(output.events.first == .button(.left, down: true, clicks: 1))
+        #expect(output.moves.first?.dragging == .left)
+        #expect(output.events.last == .button(.left, down: false, clicks: 1))
+    }
+
+    @Test func scrollFollowsFinger() {
+        let (pointer, output) = makePointer()
+        pointer.isScrolling = true
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        pointer.handle(frame(0.5, 0.6, at: 0.02))
+        pointer.handle(frame(0.6, 0.6, at: 0.04))
+        #expect(output.moves.isEmpty)
+        // 手指上移显示下方内容（负值），右移显示左侧内容（正值）
+        #expect(output.scrolls[0].dy < 0 && output.scrolls[0].dx == 0 && output.scrolls[0].phase == .began)
+        #expect(output.scrolls[1].dx > 0 && output.scrolls[1].phase == .changed)
+    }
+
+    @Test func flickKeepsScrollingWithMomentum() {
+        let clock = ManualClock()
+        let (pointer, output) = makePointer(clock: clock)
+        pointer.isScrolling = true
+        pointer.handle(frame(0.5, 0.3, at: 0))
+        pointer.handle(frame(0.5, 0.4, at: 0.016))
+        pointer.handle(frame(0.5, 0.5, at: 0.032))
+        pointer.handle(lift(0.04))
+        #expect(output.scrolls.last?.phase == .ended)
+        clock.advance(0.5)
+        let momentum = output.scrolls.filter { $0.phase == .momentumBegan || $0.phase == .momentum }
+        #expect(momentum.first?.phase == .momentumBegan)
+        #expect(momentum.count > 5 && momentum.allSatisfy { $0.dy < 0 })
+        // 越滑越慢
+        #expect(abs(momentum.last!.dy) < abs(momentum.first!.dy))
+        clock.advance(5)
+        #expect(output.scrolls.last?.phase == .momentumEnded)
+        #expect(output.scrolls.filter { $0.phase == .momentumEnded }.count == 1)
+    }
+
+    @Test func noMomentumAfterFingerStops() {
+        let clock = ManualClock()
+        let (pointer, output) = makePointer(clock: clock)
+        pointer.isScrolling = true
+        pointer.handle(frame(0.5, 0.3, at: 0))
+        pointer.handle(frame(0.5, 0.5, at: 0.016))
+        pointer.handle(frame(0.5, 0.5, at: 0.2))
+        pointer.handle(lift(0.3))
+        clock.advance(1)
+        #expect(!output.scrolls.contains { $0.phase == .momentumBegan })
+    }
+
+    @Test func touchingAgainStopsMomentum() {
+        let clock = ManualClock()
+        let (pointer, output) = makePointer(clock: clock)
+        pointer.isScrolling = true
+        pointer.handle(frame(0.5, 0.3, at: 0))
+        pointer.handle(frame(0.5, 0.5, at: 0.016))
+        pointer.handle(lift(0.02))
+        clock.advance(0.1)
+        pointer.handle(frame(0.5, 0.5, at: 0.2, id: 2))
+        #expect(output.scrolls.last?.phase == .momentumEnded)
+        let count = output.scrolls.count
+        clock.advance(1)
+        #expect(output.scrolls.count == count)
+    }
+
+    @Test func togglingScrollNotifiesAndEndsGesture() {
+        let (pointer, output) = makePointer()
+        var states: [Bool] = []
+        pointer.onScrollingChange = { states.append($0) }
+        pointer.isScrolling = true
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        pointer.handle(frame(0.5, 0.6, at: 0.02))
+        pointer.isScrolling = false
+        #expect(states == [true, false])
+        #expect(output.scrolls.last?.phase == .ended)
+        // 切回光标后移动的是光标
+        pointer.handle(frame(0.6, 0.6, at: 0.04))
+        #expect(output.moves.count == 1)
+    }
+
+    @Test func tapClicksOnlyWhenEnabled() {
+        let (pointer, output) = makePointer(tapToClick: true)
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        pointer.handle(frame(0.505, 0.5, at: 0.05))
+        pointer.handle(lift(0.1))
+        #expect(output.events.filter { if case .button = $0 { true } else { false } }.count == 2)
+
+        let (off, offOut) = makePointer(tapToClick: false)
+        off.handle(frame(0.5, 0.5, at: 0))
+        off.handle(lift(0.1))
+        #expect(offOut.events.isEmpty)
+
+        // 划动后抬起不是轻点
+        let (moved, movedOut) = makePointer(tapToClick: true)
+        moved.handle(frame(0.3, 0.5, at: 0))
+        moved.handle(frame(0.5, 0.5, at: 0.05))
+        moved.handle(lift(0.1))
+        #expect(!movedOut.events.contains { if case .button = $0 { true } else { false } })
+    }
+
+    @Test func freezesBrieflyAfterPhysicalPress() {
+        let (pointer, output) = makePointer(tapToClick: true)
+        pointer.handle(frame(0.5, 0.5, at: 0))
+        pointer.noteButtonPress()
+        pointer.handle(frame(0.52, 0.5, at: 0.02))
+        pointer.handle(frame(0.54, 0.5, at: 0.1))
+        #expect(output.moves.isEmpty)
+        pointer.handle(frame(0.6, 0.5, at: 0.3))
+        #expect(output.moves.count == 1)
+        // 按过实体键的这次触摸不算轻点
+        pointer.handle(lift(0.32))
+        #expect(!output.events.contains { if case .button = $0 { true } else { false } })
+    }
+
+    @Test func quickSecondClickIsDoubleClick() {
+        let (pointer, output) = makePointer()
+        pointer.click(.left)
+        pointer.click(.left)
+        #expect(output.events == [.button(.left, down: true, clicks: 1), .button(.left, down: false, clicks: 1),
+                                  .button(.left, down: true, clicks: 2), .button(.left, down: false, clicks: 2)])
+    }
+
+    @Test func resetReleasesHeldButtons() {
+        let (pointer, output) = makePointer()
+        pointer.press(.right)
+        pointer.isScrolling = true
+        pointer.reset()
+        #expect(output.events.last == .button(.right, down: false, clicks: 1))
+        #expect(!pointer.isScrolling && pointer.heldButtons.isEmpty)
+    }
+
+    @Test func holdScrollThroughRunner() {
+        let (pointer, _) = makePointer()
+        let runner = ActionRunner()
+        runner.pointer = pointer
+        runner.begin(.pointerScroll, for: .playPause)
+        #expect(pointer.isScrolling)
+        runner.end(for: .playPause)
+        #expect(!pointer.isScrolling)
+    }
+
+    @Test func toggleTouchModeFlipsConfig() {
+        let url = FileManager.default.temporaryDirectory.appending(path: "remote-\(UUID().uuidString).json")
+        let store = ConfigStore(fileURL: url, persists: false, initial: .default)
+        let engine = RemoteEngine(store: store, pointerOutput: RecordingPointerOutput())
+        engine.runner.onToggleTouchMode()
+        #expect(store.config.touch.mode == .pointer)
+        engine.runner.onToggleTouchMode()
+        #expect(store.config.touch.mode == .gestures)
+    }
+
+    @Test func mouseActionsAndSettingsAreReadable() throws {
+        let json = String(data: try JSONEncoder().encode(Action.mouseButton(.right)), encoding: .utf8)!
+        #expect(json.contains("\"type\":\"mouseButton\"") && json.contains("\"button\":\"right\""))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(#"{"type":"mouseButton"}"#.utf8)) == .mouseButton(.left))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(#"{"type":"pointerScroll"}"#.utf8)) == .pointerScroll)
+        #expect(try JSONDecoder().decode(Action.self, from: Data(#"{"type":"toggleTouchMode"}"#.utf8)) == .toggleTouchMode)
+
+        let old = try JSONDecoder().decode(TouchSettings.self, from: Data(#"{"isEnabled":true}"#.utf8))
+        #expect(old.mode == .gestures && old.pointerSpeed == 1 && !old.tapToClick)
+        let pointer = try JSONDecoder().decode(TouchSettings.self, from: Data(#"{"mode":"pointer","pointerSpeed":2}"#.utf8))
+        #expect(pointer.mode == .pointer && pointer.pointerSpeed == 2)
+        #expect(Preset.all.filter { $0.group == .mouse && $0.action.kind == .mouseButton }.allSatisfy { $0.preferredGesture == .hold })
+    }
+}
+
+@Suite struct PointerProfileTests {
+    @Test func defaultConfigHasPointerProfile() throws {
+        let config = RemoteConfig.default
+        let pointer = try #require(config.pointerProfile)
+        #expect(!pointer.isGlobal)
+        // 侧键单击为确定、双击切换滚轮；按下触控板为左键（可拖动）；返回键为右键
+        #expect(pointer.mapping(for: .siri)?.tap?.action == .mouseButton(.left))
+        #expect(pointer.mapping(for: .siri)?.tap?.displayTitle == "确定")
+        #expect(pointer.mapping(for: .siri)?.doubleTap?.action == .pointerScroll)
+        #expect(pointer.mapping(for: .select)?.hold?.action == .mouseButton(.left))
+        #expect(pointer.mapping(for: .back)?.tap?.action == .mouseButton(.right))
+        #expect(pointer.mapping(for: .mute) == nil)
+        #expect(config.globalProfile.isGlobal && config.profiles.filter(\.isGlobal).count == 1)
+    }
+
+    @Test func pointerProfileWinsOnlyInPointerMode() {
+        var config = RemoteConfig.default
+        var global = config.globalProfile
+        global.mappings[.siri] = ButtonMapping(longPress: Preset.find("dot.toggleCall")!.bound)
+        config.globalProfile = global
+
+        // 手势模式：Siri 长按仍是呼叫 dot
+        #expect(config.resolve(.siri, frontmost: nil)?.mapping.longPress?.action == .dotCall(.toggle))
+        config.touch.mode = .pointer
+        #expect(config.resolve(.siri, frontmost: nil)?.mapping.tap?.action == .mouseButton(.left))
+        #expect(config.resolve(.siri, frontmost: nil)?.profile.isPointerMode == true)
+        // 鼠标模式优先于 App 专属配置：终端里的「确认 = 发送」被左键覆盖
+        #expect(config.resolve(.select, frontmost: KnownApp.iTerm)?.mapping.hold?.action == .mouseButton(.left))
+        // 鼠标模式配置里没设置的键沿用原来的映射
+        #expect(config.resolve(.tv, frontmost: nil)?.profile.isGlobal == true)
+        #expect(config.resolve(.playPause, frontmost: KnownApp.iTerm)?.profile.bundleIDs == [KnownApp.iTerm, KnownApp.terminal])
+        // 关闭触控时鼠标模式不生效
+        config.touch.isEnabled = false
+        #expect(config.resolve(.siri, frontmost: nil)?.mapping.longPress?.action == .dotCall(.toggle))
+    }
+
+    @Test func migrationAddsPointerProfileOnce() throws {
+        let json = #"{"version": 2, "profiles": [{"name": "全局", "mappings": {}}]}"#
+        var config = try JSONDecoder().decode(RemoteConfig.self, from: Data(json.utf8))
+        #expect(config.pointerProfile == nil)
+        let migrated = config.migrate()
+        #expect(migrated)
+        #expect(config.profiles.filter(\.isPointerMode).count == 1)
+        let migratedAgain = config.migrate()
+        #expect(!migratedAgain)
+        #expect(config.profiles.filter(\.isPointerMode).count == 1)
+
+        let encoded = String(data: try JSONEncoder().encode(config), encoding: .utf8)!
+        #expect(encoded.contains("\"pointerMode\":true"))
+        let decoded = try JSONDecoder().decode(RemoteConfig.self, from: Data(encoded.utf8))
+        #expect(decoded.pointerProfile?.name == "鼠标模式")
+    }
+
+    @Test func pointerActionsRunWhileSettingsFocused() {
+        #expect(Action.mouseButton(.left).runsWhileSettingsFocused)
+        #expect(Action.pointerScroll.runsWhileSettingsFocused)
+        #expect(!Action.keystroke(.returnKey).runsWhileSettingsFocused)
+    }
+}
+
+@Suite struct RingScrollTests {
+    /// 外圈上某个角度的点，半径 0.45（触控面边长为 1）
+    private func ring(_ degrees: Double, radius: Double = 0.45) -> (Double, Double) {
+        let a = degrees * .pi / 180
+        return (0.5 + radius * cos(a), 0.5 + radius * sin(a))
+    }
+
+    private func run(_ points: [(Double, Double)], settings: TouchSettings = TouchSettings(mode: .pointer))
+        -> RecordingPointerOutput {
+        let output = RecordingPointerOutput()
+        let pointer = TouchPointer(settings: settings, output: output, clock: ManualClock())
+        for (index, point) in points.enumerated() {
+            pointer.handle(TouchFrame(contacts: [TouchContact(id: 1, state: 4, x: point.0, y: point.1)], timestamp: Double(index) * 0.016))
+        }
+        pointer.handle(TouchFrame(contacts: [], timestamp: Double(points.count) * 0.016))
+        return output
+    }
+
+    @Test func clockwiseOnRingScrollsDown() {
+        // 从上方起手（右侧属于滚动区）；y 向上时角度减小即顺时针
+        let output = run(stride(from: 90.0, through: 0, by: -6).map { ring($0) })
+        #expect(output.moves.isEmpty)
+        let deltas = output.scrolls.filter { $0.phase == .began || $0.phase == .changed }
+        #expect(!deltas.isEmpty && deltas.allSatisfy { $0.dy < 0 && $0.dx == 0 })
+        // 转盘停手即停：结束后没有惯性
+        #expect(output.scrolls.last?.phase == .ended)
+        #expect(!output.scrolls.contains { $0.phase == .momentumBegan })
+        // 转过 90° 约滚动 ringGain × π/2 像素
+        #expect(abs(deltas.reduce(0) { $0 + $1.dy } + 190 * .pi / 2) < 40)
+    }
+
+    @Test func counterclockwiseOnRingScrollsUp() {
+        let output = run(stride(from: 90.0, through: 180, by: 6).map { ring($0) })
+        #expect(output.moves.isEmpty)
+        #expect(output.scrolls.filter { $0.phase == .changed }.allSatisfy { $0.dy > 0 })
+    }
+
+    @Test func swipingInwardFromRingMovesPointer() {
+        // 从左侧外圈往中间划：径向为主，是移动光标
+        let output = run(stride(from: 0.05, through: 0.4, by: 0.02).map { ($0, 0.5) })
+        #expect(output.scrolls.isEmpty)
+        #expect(output.moves.allSatisfy { $0.dx > 0 })
+        // 判定前积累的位移会补发，总位移不丢
+        #expect(output.moves.reduce(0) { $0 + $1.dx } > 100)
+    }
+
+    @Test func centerTouchMovesWithoutDelay() {
+        let output = run([(0.5, 0.5), (0.52, 0.5)])
+        #expect(output.moves.count == 1)
+    }
+
+    @Test func ringScrollCanBeDisabled() {
+        let output = run(stride(from: 90.0, through: 0, by: -6).map { ring($0) },
+                         settings: TouchSettings(mode: .pointer, ringScroll: false))
+        #expect(output.scrolls.isEmpty && !output.moves.isEmpty)
+    }
+
+    @Test func narrowerRingLeavesMoreRoomForPointer() {
+        // 半径 0.36 的圆周：外圈宽 0.18 时在外圈内，宽 0.12 时属于中间区域
+        let path = stride(from: 90.0, through: 0, by: -6).map { ring($0, radius: 0.36) }
+        #expect(!run(path, settings: TouchSettings(mode: .pointer, ringWidth: 0.18)).scrolls.isEmpty)
+        let narrow = run(path, settings: TouchSettings(mode: .pointer, ringWidth: 0.12))
+        #expect(narrow.scrolls.isEmpty && !narrow.moves.isEmpty)
+    }
+
+    @Test func ringWidthDefaultsForOldConfigs() throws {
+        let settings = try JSONDecoder().decode(TouchSettings.self, from: Data(#"{"mode":"pointer"}"#.utf8))
+        #expect(settings.ringScroll && settings.ringWidth == 0.12)
+        #expect(settings.sideScroll && settings.sideScrollWidth == 0.33)
+    }
+
+    // MARK: 右侧滚动区
+
+    @Test func rightStripScrollFollowsFinger() {
+        // 在右侧往上滑：内容跟着手指往上走，显示下方内容（负值）
+        let output = run(stride(from: 0.3, through: 0.7, by: 0.03).map { (0.85, $0) })
+        #expect(output.moves.isEmpty)
+        let deltas = output.scrolls.filter { $0.phase == .began || $0.phase == .changed }
+        #expect(!deltas.isEmpty && deltas.allSatisfy { $0.dy < 0 && $0.dx == 0 })
+        // 判定前积累的位移也补发了：总滚动约等于整面滚轮的滚动量
+        #expect(abs(deltas.reduce(0) { $0 + $1.dy } + 0.39 * 900) < 40)
+        #expect(output.scrolls.contains { $0.phase == .ended })
+    }
+
+    @Test func rightStripDownScrollsUp() {
+        let output = run(stride(from: 0.7, through: 0.3, by: -0.03).map { (0.85, $0) })
+        #expect(output.scrolls.filter { $0.phase == .changed }.allSatisfy { $0.dy > 0 })
+    }
+
+    @Test func horizontalFromRightStripMovesPointer() {
+        let output = run(stride(from: 0.85, through: 0.5, by: -0.03).map { ($0, 0.5) })
+        #expect(output.scrolls.isEmpty && output.moves.allSatisfy { $0.dx < 0 })
+    }
+
+    @Test func leftSideMovesPointerVertically() {
+        // 左侧不是滚动区：上下滑动移动光标
+        let output = run(stride(from: 0.4, through: 0.6, by: 0.02).map { (0.3, $0) })
+        #expect(output.scrolls.isEmpty && output.moves.allSatisfy { $0.dy < 0 })
+    }
+
+    @Test func rightStripFlickHasMomentum() {
+        let clock = ManualClock()
+        let output = RecordingPointerOutput()
+        let pointer = TouchPointer(settings: TouchSettings(mode: .pointer), output: output, clock: clock)
+        for (index, y) in [0.3, 0.38, 0.46, 0.54].enumerated() {
+            pointer.handle(TouchFrame(contacts: [TouchContact(id: 1, state: 4, x: 0.85, y: y)], timestamp: Double(index) * 0.016))
+        }
+        pointer.handle(TouchFrame(contacts: [], timestamp: 0.07))
+        clock.advance(0.3)
+        #expect(output.scrolls.contains { $0.phase == .momentumBegan })
+    }
+
+    @Test func sideScrollCanBeDisabledOrNarrowed() {
+        let path = stride(from: 0.3, through: 0.7, by: 0.03).map { (0.75, $0) }
+        // 宽 33% 时 x = 0.75 在滚动区内
+        #expect(!run(path).scrolls.isEmpty)
+        // 宽 20% 时 x = 0.75 不在滚动区内
+        #expect(run(path, settings: TouchSettings(mode: .pointer, sideScrollWidth: 0.2)).scrolls.isEmpty)
+        #expect(run(path, settings: TouchSettings(mode: .pointer, sideScroll: false)).scrolls.isEmpty)
+    }
+}

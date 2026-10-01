@@ -34,8 +34,12 @@ public final class RemoteEngine {
     public let store: ConfigStore
     @ObservationIgnored public let runner = ActionRunner()
     @ObservationIgnored public let interceptor = MediaKeyInterceptor()
+    /// 触控鼠标：鼠标模式下由触控面驱动光标，鼠标按键动作也通过它执行
+    @ObservationIgnored public let pointer: TouchPointer
 
     public private(set) var frontmostBundleID: String?
+    /// 鼠标模式下触控板是否处于滚轮状态
+    public private(set) var isPointerScrolling = false
     public private(set) var log: [LogEntry] = []
     public private(set) var interceptorRunning = false
 
@@ -51,16 +55,21 @@ public final class RemoteEngine {
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
     /// 按下时的前台 App；长按、双击在稍后触发，此时前台可能已经切换
     @ObservationIgnored private var pressFrontmost: [RemoteButton: String] = [:]
+    /// 没有辅助功能权限时移动光标会被系统丢弃，只提示一次
+    @ObservationIgnored private var warnedPointerAccess = false
     private static let logLimit = 40
 
     public init(store: ConfigStore, device: RemoteDevice = RemoteDevice(), touch: (any TouchSource)? = nil,
-                battery: BatteryMonitor = BatteryMonitor()) {
+                battery: BatteryMonitor = BatteryMonitor(), pointerOutput: PointerOutput = CGPointerOutput()) {
         self.store = store
         self.device = device
         self.touch = touch
         self.battery = battery
+        pointer = TouchPointer(settings: store.config.touch, output: pointerOutput)
         touchRecognizer.settings = store.config.touch
         runner.dictation = dictation
+        runner.pointer = pointer
+        pointer.onScrollingChange = { [unowned self] in self.isPointerScrolling = $0 }
         dictation.settings = store.config.voice
         gestures = GestureEngine(timing: store.config.gestureTiming) { [unowned self] button in
             guard let mapping = self.store.config.resolve(button, frontmost: self.pressFrontmost[button])?.mapping else {
@@ -73,6 +82,7 @@ public final class RemoteEngine {
         device.onConnectionChange = { [unowned self] connected in
             connected ? self.touch?.start() : self.touch?.stop()
             self.touchRecognizer.reset()
+            if !connected { self.pointer.reset() }
             if connected {
                 self.battery.targetName = self.device.productName
                 self.battery.start()
@@ -80,11 +90,13 @@ public final class RemoteEngine {
                 self.battery.remoteDisconnected()
             }
         }
-        touch?.onFrame = { [unowned self] frame in
-            guard self.store.config.touch.isEnabled else { return }
-            self.touchRecognizer.handle(frame)
-        }
+        touch?.onFrame = { [unowned self] frame in self.handle(frame) }
         touchRecognizer.onGesture = { [unowned self] in self.handle(touch: $0) }
+        runner.onToggleTouchMode = { [unowned self] in
+            let mode: TouchMode = self.store.config.touch.mode == .pointer ? .gestures : .pointer
+            self.store.config.touch.mode = mode
+            self.append(button: nil, gesture: nil, title: "触控已切换为\(mode.displayName)", kind: .action)
+        }
         runner.onError = { [unowned self] message in self.append(button: nil, gesture: nil, title: message, kind: .error) }
         interceptor.shouldIntercept = { [unowned self] button in
             let config = self.store.config
@@ -119,6 +131,12 @@ public final class RemoteEngine {
     public func configDidChange() {
         gestures.timing = store.config.gestureTiming
         touchRecognizer.settings = store.config.touch
+        if pointer.settings.mode != store.config.touch.mode {
+            // 切换用途时丢弃进行中的触摸，并松开按住的鼠标键
+            touchRecognizer.reset()
+            pointer.reset()
+        }
+        pointer.settings = store.config.touch
         if dictation.settings != store.config.voice { dictation.settings = store.config.voice }
         if !store.config.isEnabled {
             gestures.reset()
@@ -141,6 +159,7 @@ public final class RemoteEngine {
             onButtonDown(button)
             // 按压触控板时手指必然在触控面上，这次触摸不再识别为滑动或转动
             if button == .select || button.isDirectional { touchRecognizer.suppressCurrentTouch() }
+            if store.config.touch.mode == .pointer { pointer.noteButtonPress() }
         }
         guard store.config.isEnabled else {
             if isDown { append(button: button, gesture: nil, title: "映射已停用", kind: .passthrough) }
@@ -156,7 +175,7 @@ public final class RemoteEngine {
         switch output {
         case .fire(let button, let gesture):
             guard let bound = boundAction(button, gesture) else { return }
-            if isPreviewOnly() {
+            if isPreviewOnly(), !bound.action.runsWhileSettingsFocused {
                 append(button: button, gesture: gesture, title: bound.displayTitle, kind: .preview)
                 return
             }
@@ -168,7 +187,7 @@ public final class RemoteEngine {
 
         case .begin(let button):
             guard let bound = boundAction(button, .hold) else { return }
-            if isPreviewOnly() {
+            if isPreviewOnly(), !bound.action.runsWhileSettingsFocused {
                 append(button: button, gesture: .hold, title: bound.displayTitle, kind: .preview)
                 return
             }
@@ -177,6 +196,26 @@ public final class RemoteEngine {
 
         case .end(let button):
             runner.end(for: button)
+        }
+    }
+
+    private func handle(_ frame: TouchFrame) {
+        let settings = store.config.touch
+        guard settings.isEnabled else { return }
+        switch settings.mode {
+        case .gestures:
+            touchRecognizer.handle(frame)
+        case .pointer:
+            // 设置窗口在前台时也允许移动光标，否则无法用遥控器操作设置界面
+            guard store.config.isEnabled else { return }
+            guard ActionRunner.hasAccessibility else {
+                if !warnedPointerAccess, frame.contacts.contains(where: \.isTouching) {
+                    warnedPointerAccess = true
+                    append(button: nil, gesture: nil, title: "需要「辅助功能」权限才能移动光标", kind: .error)
+                }
+                return
+            }
+            pointer.handle(frame)
         }
     }
 

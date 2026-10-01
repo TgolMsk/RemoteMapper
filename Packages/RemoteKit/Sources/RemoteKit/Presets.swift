@@ -11,11 +11,12 @@ public enum KnownApp {
 /// 面向开发工具的预设动作。
 public struct Preset: Identifiable, Sendable {
     public enum Group: String, CaseIterable, Sendable {
-        case voice, claudeCode, claudeDesktop, codex, dot, system
+        case voice, mouse, claudeCode, claudeDesktop, codex, dot, system
 
         public var displayName: String {
             switch self {
             case .voice: "语音输入"
+            case .mouse: "触控鼠标"
             case .claudeCode: "Claude Code · 终端"
             case .claudeDesktop: "Claude 桌面版"
             case .codex: "Codex"
@@ -46,6 +47,26 @@ public struct Preset: Identifiable, Sendable {
         Preset(id: "voice.dictationSubmit", group: .voice, title: "语音输入并发送",
                detail: "按住说话，松开后输入文字并按 ↩ 发送", symbol: "paperplane.fill",
                action: .dictation(submit: true), preferredGesture: .hold),
+
+        // 触控鼠标：在「通用 › 触控」中把用途切换为「鼠标」后，单指在触控面上移动光标
+        Preset(id: "mouse.left", group: .mouse, title: "鼠标左键",
+               detail: "按下即按住，配合触控移动可拖动；快速按两下即双击", symbol: "cursorarrow.click",
+               action: .mouseButton(.left), preferredGesture: .hold),
+        Preset(id: "mouse.right", group: .mouse, title: "鼠标右键",
+               detail: "打开右键菜单；按住时配合触控移动可右键拖动", symbol: "contextualmenu.and.cursorarrow",
+               action: .mouseButton(.right), preferredGesture: .hold),
+        Preset(id: "mouse.middle", group: .mouse, title: "鼠标中键",
+               detail: "例如在浏览器中用新标签页打开链接", symbol: "computermouse",
+               action: .mouseButton(.middle), preferredGesture: .hold),
+        Preset(id: "mouse.scroll", group: .mouse, title: "按住滚动",
+               detail: "按住时在触控面上滑动即滚动，内容跟随手指", symbol: "arrow.up.and.down.and.arrow.left.and.right",
+               action: .pointerScroll, preferredGesture: .hold),
+        Preset(id: "mouse.scrollToggle", group: .mouse, title: "切换滚轮",
+               detail: "在光标与滚轮之间切换；滚轮时在触控面上滑动即翻页，松手后带惯性", symbol: "scroll",
+               action: .pointerScroll, preferredGesture: .doubleTap),
+        Preset(id: "mouse.toggleMode", group: .mouse, title: "切换触控鼠标",
+               detail: "在触控手势与鼠标之间切换", symbol: "cursorarrow.motionlines",
+               action: .toggleTouchMode, preferredGesture: nil),
 
         // Claude Code：默认键位来自 https://code.claude.com/docs/en/keybindings
         Preset(id: "claudeCode.voice", group: .claudeCode, title: "按住说话",

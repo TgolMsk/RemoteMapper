@@ -1,25 +1,28 @@
 import Foundation
 
 /// 一组按键映射。bundleIDs 为空的是全局配置；否则只在这些 App 位于前台时生效，
-/// 未在其中设置的按钮会回落到全局配置。
+/// 未在其中设置的按钮会回落到全局配置。鼠标模式配置在触控板用作鼠标时优先于以上两者。
 public struct Profile: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var name: String
     public var bundleIDs: [String]
+    /// 鼠标模式专属：触控板用途为「鼠标」时，其中设置的按键优先生效
+    public var isPointerMode: Bool
     public var mappings: [RemoteButton: ButtonMapping]
     /// 触控手势的映射，每个手势对应一个动作
     public var touchMappings: [TouchGesture: BoundAction]
 
-    public init(id: UUID = UUID(), name: String, bundleIDs: [String] = [], mappings: [RemoteButton: ButtonMapping] = [:],
-                touchMappings: [TouchGesture: BoundAction] = [:]) {
+    public init(id: UUID = UUID(), name: String, bundleIDs: [String] = [], isPointerMode: Bool = false,
+                mappings: [RemoteButton: ButtonMapping] = [:], touchMappings: [TouchGesture: BoundAction] = [:]) {
         self.id = id
         self.name = name
         self.bundleIDs = bundleIDs
+        self.isPointerMode = isPointerMode
         self.mappings = mappings
         self.touchMappings = touchMappings
     }
 
-    public var isGlobal: Bool { bundleIDs.isEmpty }
+    public var isGlobal: Bool { bundleIDs.isEmpty && !isPointerMode }
 
     public func mapping(for button: RemoteButton) -> ButtonMapping? {
         mappings[button].flatMap { $0.isEmpty ? nil : $0 }
@@ -27,6 +30,7 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, bundleIDs, mappings
+        case isPointerMode = "pointerMode"
         case touchMappings = "touch"
     }
 
@@ -35,6 +39,7 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try c.decode(String.self, forKey: .name)
         bundleIDs = try c.decodeIfPresent([String].self, forKey: .bundleIDs) ?? []
+        isPointerMode = try c.decodeIfPresent(Bool.self, forKey: .isPointerMode) ?? false
         mappings = try c.decodeIfPresent([RemoteButton: ButtonMapping].self, forKey: .mappings) ?? [:]
         touchMappings = try c.decodeIfPresent([TouchGesture: BoundAction].self, forKey: .touchMappings) ?? [:]
     }
@@ -44,6 +49,7 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
         try c.encode(id, forKey: .id)
         try c.encode(name, forKey: .name)
         try c.encode(bundleIDs, forKey: .bundleIDs)
+        if isPointerMode { try c.encode(true, forKey: .isPointerMode) }
         try c.encode(mappings, forKey: .mappings)
         if !touchMappings.isEmpty { try c.encode(touchMappings, forKey: .touchMappings) }
     }
@@ -60,7 +66,7 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
     public var voice: VoiceSettings
     public var profiles: [Profile]
 
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public init(version: Int = RemoteConfig.currentVersion, isEnabled: Bool = true, interceptSystemKeys: Bool = true,
                 longPressThreshold: Double = 0.45, doubleTapInterval: Double = 0.28, touch: TouchSettings = TouchSettings(),
@@ -100,6 +106,12 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
         }
     }
 
+    /// 鼠标模式配置
+    public var pointerProfile: Profile? { profiles.first(where: \.isPointerMode) }
+
+    /// 触控板当前是否用作鼠标
+    public var isPointerModeActive: Bool { touch.isEnabled && touch.mode == .pointer }
+
     /// 前台 App 对应的专属配置
     public func appProfile(for bundleID: String?) -> Profile? {
         guard let bundleID else { return nil }
@@ -108,6 +120,9 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
 
     /// 解析某个按钮在当前前台 App 下实际生效的映射及其来源配置
     public func resolve(_ button: RemoteButton, frontmost bundleID: String?) -> (mapping: ButtonMapping, profile: Profile)? {
+        if isPointerModeActive, let pointer = pointerProfile, let mapping = pointer.mapping(for: button) {
+            return (mapping, pointer)
+        }
         if let app = appProfile(for: bundleID), let mapping = app.mapping(for: button) {
             return (mapping, app)
         }
@@ -124,7 +139,7 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
         return global.touchMappings[gesture].map { ($0, global) }
     }
 
-    /// 旧版本配置升级：v1 → v2 补上默认的触控手势映射（只填补空缺，不覆盖已有设置）
+    /// 旧版本配置升级（只填补空缺，不覆盖已有设置）：v1 → v2 补上默认的触控手势映射，v2 → v3 补上鼠标模式配置
     @discardableResult
     public mutating func migrate() -> Bool {
         guard version < Self.currentVersion else { return false }
@@ -137,6 +152,9 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
                     : defaults.profiles.first { !$0.isGlobal && !Set($0.bundleIDs).isDisjoint(with: profile.bundleIDs) }
                 profiles[index].touchMappings = template?.touchMappings ?? [:]
             }
+        }
+        if version < 3, pointerProfile == nil {
+            profiles.append(RemoteConfig.defaultPointerProfile)
         }
         version = Self.currentVersion
         return true
@@ -215,6 +233,20 @@ public extension RemoteConfig {
             .swipeRight: preset("system.nextTab"),
         ])
 
-        return RemoteConfig(profiles: [global, terminal])
+        return RemoteConfig(profiles: [global, terminal, defaultPointerProfile])
+    }
+
+    /// 鼠标模式的默认映射：侧面 Siri 键单击为确定（左键单击）、双击在光标与滚轮之间切换；
+    /// 按下触控板为左键（可双击、按住可拖动），返回键为右键。
+    /// 触控面只支持单指，拇指在触控面上时按不到其它键，所以滚轮用开关而不是按住
+    static var defaultPointerProfile: Profile {
+        func preset(_ id: String) -> BoundAction { Preset.find(id)!.bound }
+        var confirm = preset("mouse.left")
+        confirm.title = "确定"
+        return Profile(name: "鼠标模式", isPointerMode: true, mappings: [
+            .select: ButtonMapping(hold: preset("mouse.left")),
+            .siri: ButtonMapping(tap: confirm, doubleTap: preset("mouse.scrollToggle")),
+            .back: ButtonMapping(tap: preset("mouse.right")),
+        ])
     }
 }

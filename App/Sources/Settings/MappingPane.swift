@@ -11,6 +11,7 @@ struct MappingPane: View {
             VStack(alignment: .leading, spacing: 26) {
                 if !model.hasAccessibility { AccessibilityBanner() }
                 ProfileStrip()
+                if Edition.supportsTouch, model.selectedProfile.isPointerMode { PointerModeSwitch() }
                 if Edition.supportsTouch { MappingModeSwitch() }
                 switch Edition.supportsTouch ? model.mappingMode : .buttons {
                 case .buttons:
@@ -19,7 +20,15 @@ struct MappingPane: View {
                     OptionsCard(button: model.selectedButton)
                 case .touch:
                     TouchHeader()
-                    TouchCard()
+                    if model.selectedProfile.isPointerMode {
+                        Text("鼠标模式下触控板用于移动光标，没有触控手势。在「按键」中设置鼠标模式下各个键的作用。")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .card(padding: 18)
+                    } else {
+                        TouchCard()
+                    }
                 }
             }
             .padding(.horizontal, 32)
@@ -75,7 +84,8 @@ struct ProfileStrip: View {
             Text("配置").eyebrowStyle().padding(.horizontal, 4)
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
-                    ForEach(model.config.profiles) { profile in
+                    // App Store 版没有触控面，不显示鼠标模式配置
+                    ForEach(model.config.profiles.filter { Edition.supportsTouch || !$0.isPointerMode }) { profile in
                         ProfilePill(profile: profile,
                                     isSelected: profile.id == model.selectedProfileID,
                                     isActive: profile.id == model.activeProfile.id && model.config.isEnabled)
@@ -83,7 +93,7 @@ struct ProfileStrip: View {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { model.selectedProfileID = profile.id }
                             }
                             .contextMenu {
-                                if !profile.isGlobal {
+                                if !profile.isGlobal, !profile.isPointerMode {
                                     Button("删除「\(profile.name)」配置", role: .destructive) { model.deleteProfile(profile.id) }
                                 }
                             }
@@ -105,6 +115,10 @@ struct ProfileStrip: View {
 
     private func profileCaption(_ profile: Profile) -> String {
         if profile.isGlobal { return "在任何 App 中生效。App 专属配置中未设置的按键，也会沿用这里的设置。" }
+        if profile.isPointerMode {
+            return "触控板用途为「鼠标」时生效，优先于 App 专属配置；这里未设置的按键沿用原来的映射。"
+                + (model.config.touch.mode == .pointer ? "" : "当前为手势模式，未生效。")
+        }
         let names = profile.bundleIDs.map(AppInfo.name(for:)).joined(separator: "、")
         return "当 \(names) 位于前台时生效，未设置的按键沿用全局。"
     }
@@ -145,6 +159,9 @@ struct ProfilePill: View {
     @ViewBuilder private var icon: some View {
         if profile.isGlobal {
             Image(systemName: "globe")
+                .font(.system(size: 12, weight: .semibold))
+        } else if profile.isPointerMode {
+            Image(systemName: "cursorarrow.motionlines")
                 .font(.system(size: 12, weight: .semibold))
         } else if let bundleID = profile.bundleIDs.first, let image = AppInfo.icon(for: bundleID) {
             Image(nsImage: image).resizable().interpolation(.high)
@@ -248,7 +265,7 @@ struct ButtonHeader: View {
             if model.mapping(button, in: profile.id) != nil {
                 Tag(text: "\(profile.name) 专属", tint: Theme.accent)
             } else {
-                Tag(text: "沿用全局")
+                Tag(text: profile.isPointerMode ? "沿用原映射" : "沿用全局")
             }
         }
     }
@@ -572,6 +589,23 @@ struct MappingModeSwitch: View {
 
 // MARK: - 触控手势
 
+/// 选中鼠标模式配置时直接显示开关，不必去「通用」里找
+struct PointerModeSwitch: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let isOn = model.config.touch.mode == .pointer
+        SettingsGroup("鼠标模式") {
+            SettingRow(title: "启用鼠标模式",
+                       detail: "单指移动光标，右侧上下滑或沿外圈转动即滚动；侧面 Siri 键单击为确定、双击切换为整面滚轮。",
+                       symbol: "cursorarrow.motionlines", showsDivider: false) {
+                Toggle("启用鼠标模式", isOn: Binding(get: { isOn }, set: { model.config.touch.mode = $0 ? .pointer : .gestures }))
+                    .toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+            }
+        }
+    }
+}
+
 struct TouchHeader: View {
     @Environment(AppModel.self) private var model
 
@@ -592,7 +626,11 @@ struct TouchHeader: View {
                     case .unavailable(let message): Tag(text: message, tint: Theme.warning)
                     case .idle: Tag(text: "等待遥控器连接")
                     }
-                    if !model.config.touch.isEnabled { Tag(text: "已在通用设置中关闭", tint: Theme.warning) }
+                    if !model.config.touch.isEnabled {
+                        Tag(text: "已在通用设置中关闭", tint: Theme.warning)
+                    } else if model.config.touch.mode == .pointer {
+                        Tag(text: "鼠标模式中，手势暂不触发", tint: Theme.warning)
+                    }
                 }
             }
             Spacer()

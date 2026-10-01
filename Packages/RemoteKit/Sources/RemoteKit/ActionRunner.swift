@@ -16,6 +16,13 @@ public final class ActionRunner {
     /// 由「按住」开始的语音输入属于哪个按钮；单击切换开始的为 nil
     private var dictationOwner: RemoteButton?
     private var dictationSubmit = false
+    /// 触控鼠标：鼠标按键、拖动与滚动
+    public var pointer: TouchPointer?
+    /// 切换触控手势 / 触控鼠标，由引擎修改配置
+    public var onToggleTouchMode: () -> Void = {}
+    /// 由「按住」按下的鼠标键属于哪个遥控器按钮
+    private var mouseHolds: [RemoteButton: MouseButton] = [:]
+    private var scrollOwner: RemoteButton?
 
     public init() {}
 
@@ -25,11 +32,25 @@ public final class ActionRunner {
         Task { await execute(action) }
     }
 
-    /// 「按住」开始：holdKey 保持按下，语音输入开始录音，其它动作在开始时执行一次
+    /// 「按住」开始：holdKey 保持按下，语音输入开始录音，鼠标键按住，其它动作在开始时执行一次
     public func begin(_ action: Action, for button: RemoteButton) {
-        if case .dictation(let submit) = action {
+        switch action {
+        case .dictation(let submit):
             startDictation(submit: submit, owner: button)
             return
+        case .mouseButton(let mouse):
+            guard !unsupportedKinds.contains(action.kind), requireAccessibility(), let pointer else { return }
+            if let previous = mouseHolds.removeValue(forKey: button) { pointer.release(previous) }
+            mouseHolds[button] = mouse
+            pointer.press(mouse)
+            return
+        case .pointerScroll:
+            guard !unsupportedKinds.contains(action.kind), let pointer else { return }
+            scrollOwner = button
+            pointer.isScrolling = true
+            return
+        default:
+            break
         }
         guard case .holdKey(let combo) = action else {
             perform(action)
@@ -43,6 +64,11 @@ public final class ActionRunner {
     public func end(for button: RemoteButton) {
         holds.removeValue(forKey: button)?.end()
         if dictationOwner == button { finishDictation() }
+        if let mouse = mouseHolds.removeValue(forKey: button) { pointer?.release(mouse) }
+        if scrollOwner == button {
+            scrollOwner = nil
+            pointer?.isScrolling = false
+        }
     }
 
     public func endAll() {
@@ -50,6 +76,9 @@ public final class ActionRunner {
         dictationOwner = nil
         for session in holds.values { session.end() }
         holds.removeAll()
+        mouseHolds.removeAll()
+        scrollOwner = nil
+        pointer?.reset()
     }
 
     private func execute(_ action: Action) async {
@@ -112,6 +141,18 @@ public final class ActionRunner {
 
         case .dotCall(let operation):
             if let message = await DotCall.perform(operation) { onError(message) }
+
+        case .mouseButton(let mouse):
+            guard requireAccessibility() else { return }
+            pointer?.click(mouse)
+
+        case .pointerScroll:
+            // 非「按住」手势：每按一次开关一次
+            scrollOwner = nil
+            pointer?.isScrolling.toggle()
+
+        case .toggleTouchMode:
+            onToggleTouchMode()
 
         case .sequence(let actions):
             for step in actions { await execute(step) }

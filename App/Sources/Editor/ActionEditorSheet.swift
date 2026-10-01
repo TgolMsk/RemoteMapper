@@ -337,8 +337,8 @@ struct ActionEditorSheet: View {
         case .openURL(let value): kind = .openURL; url = value
         case .shell(let value): kind = .shell; command = value
         case .appleScript(let value): kind = .appleScript; script = value
-        case .dotCall:
-            // dot 通话只通过预设编辑；手写配置里的同类动作对应到同一个预设
+        case .dotCall, .mouseButton, .pointerScroll, .toggleTouchMode:
+            // 这几类动作只通过预设编辑；手写配置里的同类动作对应到同一个预设
             kind = .preset
             presetID = Preset.all.first { $0.action == current.action }?.id
         case .sequence(let steps): kind = .sequence; sequence = steps

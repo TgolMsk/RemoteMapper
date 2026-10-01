@@ -23,6 +23,12 @@ public indirect enum Action: Hashable, Sendable {
     case appleScript(String)
     /// 操作 ChatGPT 桌面版里 dot 的语音通话：通过辅助功能点击 dot 页面上的通话按钮
     case dotCall(DotCallOperation)
+    /// 鼠标按键。绑定到「按住」时按下即按住、松开即松开，配合触控鼠标移动即拖动；绑定到其它手势时单击
+    case mouseButton(MouseButton)
+    /// 按住滚动：按住期间在触控面上滑动改为滚动；绑定到其它手势时每按一次开关一次
+    case pointerScroll
+    /// 在触控手势与触控鼠标之间切换
+    case toggleTouchMode
     /// 依次执行多个动作
     case sequence([Action])
     /// 在组合动作中等待
@@ -40,13 +46,17 @@ public indirect enum Action: Hashable, Sendable {
         case .shell: .shell
         case .appleScript: .appleScript
         case .dotCall: .dotCall
+        case .mouseButton: .mouseButton
+        case .pointerScroll: .pointerScroll
+        case .toggleTouchMode: .toggleTouchMode
         case .sequence: .sequence
         case .delay: .delay
         }
     }
 
     public enum Kind: String, CaseIterable, Sendable, Codable {
-        case keystroke, holdKey, text, scroll, dictation, openURL, launchApp, shell, appleScript, dotCall, sequence, delay
+        case keystroke, holdKey, text, scroll, dictation, openURL, launchApp, shell, appleScript, dotCall
+        case mouseButton, pointerScroll, toggleTouchMode, sequence, delay
 
         public var displayName: String {
             switch self {
@@ -60,6 +70,9 @@ public indirect enum Action: Hashable, Sendable {
             case .shell: "Shell 命令"
             case .appleScript: "AppleScript"
             case .dotCall: "dot 通话"
+            case .mouseButton: "鼠标按键"
+            case .pointerScroll: "按住滚动"
+            case .toggleTouchMode: "切换触控鼠标"
             case .sequence: "组合动作"
             case .delay: "等待"
             }
@@ -77,6 +90,9 @@ public indirect enum Action: Hashable, Sendable {
             case .shell: "terminal"
             case .appleScript: "applescript"
             case .dotCall: "phone.fill"
+            case .mouseButton: "cursorarrow.click"
+            case .pointerScroll: "arrow.up.and.down.and.arrow.left.and.right"
+            case .toggleTouchMode: "cursorarrow.motionlines"
             case .sequence: "list.number"
             case .delay: "hourglass"
             }
@@ -86,7 +102,7 @@ public indirect enum Action: Hashable, Sendable {
 
 extension Action: Codable {
     private enum CodingKeys: String, CodingKey {
-        case type, key, keyCode, modifiers, text, submit, direction, lines, url, bundleID, command, source, operation, actions, ms
+        case type, key, keyCode, modifiers, text, submit, direction, lines, url, bundleID, command, source, operation, button, actions, ms
     }
 
     public init(from decoder: Decoder) throws {
@@ -108,6 +124,9 @@ extension Action: Codable {
         case .shell: self = .shell(try c.decode(String.self, forKey: .command))
         case .appleScript: self = .appleScript(try c.decode(String.self, forKey: .source))
         case .dotCall: self = .dotCall(try c.decodeIfPresent(DotCallOperation.self, forKey: .operation) ?? .toggle)
+        case .mouseButton: self = .mouseButton(try c.decodeIfPresent(MouseButton.self, forKey: .button) ?? .left)
+        case .pointerScroll: self = .pointerScroll
+        case .toggleTouchMode: self = .toggleTouchMode
         case .sequence: self = .sequence(try c.decode([Action].self, forKey: .actions))
         case .delay: self = .delay(milliseconds: try c.decode(Int.self, forKey: .ms))
         }
@@ -131,6 +150,8 @@ extension Action: Codable {
         case .shell(let command): try c.encode(command, forKey: .command)
         case .appleScript(let source): try c.encode(source, forKey: .source)
         case .dotCall(let operation): try c.encode(operation, forKey: .operation)
+        case .mouseButton(let button): try c.encode(button, forKey: .button)
+        case .pointerScroll, .toggleTouchMode: break
         case .sequence(let actions): try c.encode(actions, forKey: .actions)
         case .delay(let ms): try c.encode(ms, forKey: .ms)
         }
@@ -190,10 +211,16 @@ public extension Action {
         case .shell(let command): command.split(separator: "\n").first.map(String.init) ?? ""
         case .appleScript(let source): source.split(separator: "\n").first.map(String.init) ?? ""
         case .dotCall(let operation): "dot · \(operation.displayName)"
+        case .mouseButton(let button): "鼠标\(button.displayName)"
+        case .pointerScroll: "按住时滑动即滚动"
+        case .toggleTouchMode: "手势 ⇄ 鼠标"
         case .sequence(let actions): actions.filter { $0.kind != .delay }.map(\.summary).joined(separator: " → ")
         case .delay(let ms): "\(ms) ms"
         }
     }
+
+    /// 鼠标点击与滚动不会把按键打进设置界面，设置窗口在前台时也照常执行，便于用遥控器操作设置界面
+    var runsWhileSettingsFocused: Bool { kind == .mouseButton || kind == .pointerScroll }
 
     /// 组合键动作的键帽，其它类型返回 nil
     var keycaps: [String]? {
