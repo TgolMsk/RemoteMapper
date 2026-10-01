@@ -26,6 +26,8 @@ public final class RemoteDevice {
 
     /// 按钮状态变化：(按钮, 是否按下)
     @ObservationIgnored public var onButton: ((RemoteButton, Bool) -> Void)?
+    /// 遥控器连接或断开
+    @ObservationIgnored public var onConnectionChange: ((Bool) -> Void)?
 
     @ObservationIgnored private var manager: IOHIDManager?
     @ObservationIgnored private var sinks: [ReportSink] = []
@@ -81,7 +83,9 @@ public final class RemoteDevice {
         let sink = ReportSink(device: device, owner: self)
         sinks.append(sink)
         productName = IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String
+        let wasConnected = isConnected
         status = .connected
+        if !wasConnected { onConnectionChange?(true) }
     }
 
     fileprivate func detach(_ device: IOHIDDevice) {
@@ -93,6 +97,7 @@ public final class RemoteDevice {
         if sinks.isEmpty {
             releaseAll()
             status = manager == nil ? .idle : .searching
+            onConnectionChange?(false)
         }
     }
 

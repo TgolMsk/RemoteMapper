@@ -8,6 +8,8 @@ public indirect enum Action: Hashable, Sendable {
     case holdKey(KeyCombo)
     /// 输入一段文字，可选输入后按回车
     case text(String, submit: Bool)
+    /// 按行滚动，例如沿触控板外圈转动时滚动终端输出
+    case scroll(ScrollDirection, lines: Int)
     /// 打开链接，例如 claude://claude.ai/new
     case openURL(String)
     /// 启动或切换到某个 App
@@ -26,6 +28,7 @@ public indirect enum Action: Hashable, Sendable {
         case .keystroke: .keystroke
         case .holdKey: .holdKey
         case .text: .text
+        case .scroll: .scroll
         case .openURL: .openURL
         case .launchApp: .launchApp
         case .shell: .shell
@@ -36,13 +39,14 @@ public indirect enum Action: Hashable, Sendable {
     }
 
     public enum Kind: String, CaseIterable, Sendable, Codable {
-        case keystroke, holdKey, text, openURL, launchApp, shell, appleScript, sequence, delay
+        case keystroke, holdKey, text, scroll, openURL, launchApp, shell, appleScript, sequence, delay
 
         public var displayName: String {
             switch self {
             case .keystroke: "快捷键"
             case .holdKey: "按住按键"
             case .text: "输入文本"
+            case .scroll: "滚动"
             case .openURL: "打开链接"
             case .launchApp: "打开 App"
             case .shell: "Shell 命令"
@@ -57,6 +61,7 @@ public indirect enum Action: Hashable, Sendable {
             case .keystroke: "command"
             case .holdKey: "arrow.down.to.line"
             case .text: "text.cursor"
+            case .scroll: "scroll"
             case .openURL: "link"
             case .launchApp: "app.badge"
             case .shell: "terminal"
@@ -70,7 +75,7 @@ public indirect enum Action: Hashable, Sendable {
 
 extension Action: Codable {
     private enum CodingKeys: String, CodingKey {
-        case type, key, keyCode, modifiers, text, submit, url, bundleID, command, source, actions, ms
+        case type, key, keyCode, modifiers, text, submit, direction, lines, url, bundleID, command, source, actions, ms
     }
 
     public init(from decoder: Decoder) throws {
@@ -82,6 +87,9 @@ extension Action: Codable {
         case .text:
             self = .text(try c.decode(String.self, forKey: .text),
                          submit: try c.decodeIfPresent(Bool.self, forKey: .submit) ?? false)
+        case .scroll:
+            self = .scroll(try c.decode(ScrollDirection.self, forKey: .direction),
+                           lines: try c.decodeIfPresent(Int.self, forKey: .lines) ?? 3)
         case .openURL: self = .openURL(try c.decode(String.self, forKey: .url))
         case .launchApp: self = .launchApp(bundleID: try c.decode(String.self, forKey: .bundleID))
         case .shell: self = .shell(try c.decode(String.self, forKey: .command))
@@ -99,12 +107,37 @@ extension Action: Codable {
         case .text(let text, let submit):
             try c.encode(text, forKey: .text)
             if submit { try c.encode(true, forKey: .submit) }
+        case .scroll(let direction, let lines):
+            try c.encode(direction, forKey: .direction)
+            try c.encode(lines, forKey: .lines)
         case .openURL(let url): try c.encode(url, forKey: .url)
         case .launchApp(let bundleID): try c.encode(bundleID, forKey: .bundleID)
         case .shell(let command): try c.encode(command, forKey: .command)
         case .appleScript(let source): try c.encode(source, forKey: .source)
         case .sequence(let actions): try c.encode(actions, forKey: .actions)
         case .delay(let ms): try c.encode(ms, forKey: .ms)
+        }
+    }
+}
+
+public enum ScrollDirection: String, CaseIterable, Codable, Sendable {
+    case up, down, left, right
+
+    public var displayName: String {
+        switch self {
+        case .up: "向上"
+        case .down: "向下"
+        case .left: "向左"
+        case .right: "向右"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .up: "arrow.up"
+        case .down: "arrow.down"
+        case .left: "arrow.left"
+        case .right: "arrow.right"
         }
     }
 }
@@ -133,6 +166,7 @@ public extension Action {
         switch self {
         case .keystroke(let combo), .holdKey(let combo): combo.displayString
         case .text(let text, let submit): "“\(text.prefix(24))”" + (submit ? " ↩" : "")
+        case .scroll(let direction, let lines): "\(direction.displayName) \(lines) 行"
         case .openURL(let url): url
         case .launchApp(let bundleID): bundleID
         case .shell(let command): command.split(separator: "\n").first.map(String.init) ?? ""

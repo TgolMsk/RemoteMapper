@@ -30,17 +30,19 @@ public final class ConfigStore {
 
     /// - Parameter persists: 为 false 时只在内存中工作（用于预览与截图）
     public init(fileURL: URL = ConfigStore.defaultFileURL, persists: Bool = true, initial: RemoteConfig? = nil) {
+        var needsMigrationSave = false
         self.fileURL = fileURL
         self.persists = persists
         if let initial {
             config = initial
-        } else if persists, let loaded = try? Self.read(fileURL) {
+        } else if persists, var loaded = try? Self.read(fileURL) {
+            needsMigrationSave = loaded.migrate()
             config = loaded
         } else {
             config = .default
         }
         if persists {
-            if !FileManager.default.fileExists(atPath: fileURL.path) { saveNow() }
+            if needsMigrationSave || !FileManager.default.fileExists(atPath: fileURL.path) { saveNow() }
             lastKnownModification = modificationDate()
             startWatching()
         }
@@ -63,7 +65,8 @@ public final class ConfigStore {
 
     public func reload() {
         do {
-            let loaded = try Self.read(fileURL)
+            var loaded = try Self.read(fileURL)
+            loaded.migrate()
             lastKnownModification = modificationDate()
             lastError = nil
             guard loaded != config else { return }

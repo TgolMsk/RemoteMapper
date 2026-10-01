@@ -14,12 +14,17 @@ struct MenuBarPanel: View {
             HStack(spacing: 12) {
                 AppGlyph(size: 38)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("RemoteMapper").font(.system(size: 14, weight: .semibold))
+                    Text("RemoteMapper").font(.system(size: 14, weight: .semibold)).fixedSize()
                     HStack(spacing: 5) {
                         Circle().fill(device.isConnected ? Theme.live : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
                         Text(device.isConnected ? "遥控器已连接" : "等待遥控器连接")
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
+                            .fixedSize()
+                        if device.isConnected, let level = model.engine.battery.level {
+                            BatteryBadge(level: level)
+                                .padding(.leading, 6)
+                        }
                     }
                 }
                 Spacer()
@@ -42,7 +47,7 @@ struct MenuBarPanel: View {
                 }
                 if let entry = model.engine.log.first {
                     HStack(spacing: 8) {
-                        Image(systemName: entry.button?.symbol ?? "exclamationmark")
+                        Image(systemName: entry.button?.symbol ?? entry.touch?.symbol ?? "exclamationmark")
                             .font(.system(size: 9, weight: .bold))
                             .frame(width: 20, height: 20)
                             .background(Theme.subtleFill, in: .circle)

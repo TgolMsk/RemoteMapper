@@ -50,6 +50,10 @@ public final class ActionRunner {
                 KeyboardSynth.tap(.returnKey)
             }
 
+        case .scroll(let direction, let lines):
+            guard requireAccessibility() else { return }
+            KeyboardSynth.scroll(direction, lines: lines)
+
         case .openURL(let string):
             guard let url = URL(string: string), url.scheme != nil else {
                 onError("无效的链接：\(string)")

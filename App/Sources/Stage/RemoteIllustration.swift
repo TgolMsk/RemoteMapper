@@ -70,7 +70,8 @@ enum CalloutSide {
 struct RemoteIllustration: View {
     let geometry: RemoteGeometry
     let pressed: Set<RemoteButton>
-    let selected: RemoteButton
+    /// 触控模式下没有选中的按键
+    let selected: RemoteButton?
     let onSelect: (RemoteButton) -> Void
 
     @State private var hovered: RemoteButton?
@@ -240,7 +241,8 @@ struct RemoteKey: View {
 struct VolumeRocker: View {
     let geometry: RemoteGeometry
     let pressed: Set<RemoteButton>
-    let selected: RemoteButton
+    /// 触控模式下没有选中的按键
+    let selected: RemoteButton?
     @Binding var hovered: RemoteButton?
     let onSelect: (RemoteButton) -> Void
 
@@ -312,7 +314,8 @@ nonisolated struct RingSegment: Shape {
 struct ClickPad: View {
     let geometry: RemoteGeometry
     let pressed: Set<RemoteButton>
-    let selected: RemoteButton
+    /// 触控模式下没有选中的按键
+    let selected: RemoteButton?
     @Binding var hovered: RemoteButton?
     let onSelect: (RemoteButton) -> Void
 

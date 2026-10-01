@@ -11,15 +11,23 @@ struct MappingPane: View {
             VStack(alignment: .leading, spacing: 26) {
                 if !model.hasAccessibility { AccessibilityBanner() }
                 ProfileStrip()
-                ButtonHeader(button: model.selectedButton)
-                GestureCard(button: model.selectedButton)
-                OptionsCard(button: model.selectedButton)
+                MappingModeSwitch()
+                switch model.mappingMode {
+                case .buttons:
+                    ButtonHeader(button: model.selectedButton)
+                    GestureCard(button: model.selectedButton)
+                    OptionsCard(button: model.selectedButton)
+                case .touch:
+                    TouchHeader()
+                    TouchCard()
+                }
             }
             .padding(.horizontal, 32)
             .padding(.top, 18)
             .padding(.bottom, 36)
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.selectedButton)
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.selectedProfileID)
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.mappingMode)
         }
         .scrollIndicators(.never)
     }
@@ -264,14 +272,23 @@ struct ButtonHeader: View {
 
 /// 与遥控器上一致的黑色按键图标
 struct KeyGlyph: View {
-    let button: RemoteButton
+    let symbol: String
     var size: CGFloat
+
+    init(symbol: String, size: CGFloat) {
+        self.symbol = symbol
+        self.size = size
+    }
+
+    init(button: RemoteButton, size: CGFloat) {
+        self.init(symbol: button.symbol, size: size)
+    }
 
     var body: some View {
         ZStack {
             Circle().fill(LinearGradient(colors: [Color(white: 0.24), Color(white: 0.07)], startPoint: .top, endPoint: .bottom))
             Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.28), .clear], startPoint: .top, endPoint: .center), lineWidth: 1)
-            Image(systemName: button.symbol)
+            Image(systemName: symbol)
                 .font(.system(size: size * 0.34, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .contentTransition(.symbolEffect(.replace))
@@ -327,13 +344,13 @@ struct GestureCard: View {
             VStack(spacing: 0) {
                 ForEach(RemoteGesture.allCases) { gesture in
                     let isBlocked = holdTakesOver && gesture != .hold
-                    GestureRow(gesture: gesture,
+                    BindingRow(title: gesture.displayName, detail: gesture.detail, symbol: gesture.symbol,
                                bound: isBlocked ? nil : mapping?[gesture],
                                isInherited: inherited != nil,
                                isBlocked: isBlocked,
                                isFiring: firing == gesture,
                                showsDivider: gesture != RemoteGesture.allCases.last) {
-                        model.editor = EditorContext(profileID: profileID, button: button, gesture: gesture)
+                        model.editor = EditorContext(profileID: profileID, target: .button(button, gesture))
                     } onClear: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             model.setAction(nil, for: gesture, button: button, in: profileID)
@@ -354,8 +371,11 @@ struct GestureCard: View {
     }
 }
 
-struct GestureRow: View {
-    let gesture: RemoteGesture
+/// 一个可绑定动作的行：图标、名称、说明，右侧为动作摘要或「添加动作」
+struct BindingRow: View {
+    let title: String
+    let detail: String
+    let symbol: String
     let bound: BoundAction?
     let isInherited: Bool
     let isBlocked: Bool
@@ -369,14 +389,14 @@ struct GestureRow: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Image(systemName: gesture.symbol)
+                Image(systemName: symbol)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(bound != nil ? Theme.accent : Color.secondary)
                     .frame(width: 32, height: 32)
                     .background(bound != nil ? Theme.accentFill : Theme.subtleFill, in: .rect(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(gesture.displayName).font(.system(size: 13.5, weight: .semibold))
-                    Text(gesture.detail).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Text(title).font(.system(size: 13.5, weight: .semibold))
+                    Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 20)
                 trailing
@@ -509,5 +529,132 @@ struct OptionsCard: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - 按键 / 触控切换
+
+struct MappingModeSwitch: View {
+    @Environment(AppModel.self) private var model
+    @Namespace private var namespace
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(MappingMode.allCases) { mode in
+                let isSelected = model.mappingMode == mode
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { model.mappingMode = mode }
+                } label: {
+                    Label(mode.title, systemImage: mode.symbol)
+                        .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(isSelected ? Theme.accent : .secondary)
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
+                        .background {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Theme.card)
+                                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+                                    .matchedGeometryEffect(id: "mode", in: namespace)
+                            }
+                        }
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Theme.subtleFill, in: .rect(cornerRadius: 11, style: .continuous))
+    }
+}
+
+// MARK: - 触控手势
+
+struct TouchHeader: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let touch = model.engine.touch
+        HStack(alignment: .center, spacing: 16) {
+            KeyGlyph(symbol: "hand.draw", size: 58)
+            VStack(alignment: .leading, spacing: 7) {
+                Text("触控手势").font(.system(size: 24, weight: .semibold))
+                HStack(spacing: 6) {
+                    if let size = touch.surfaceSize {
+                        Tag(text: String(format: "%.1f × %.1f mm", size.width, size.height), mono: true)
+                    }
+                    switch touch.status {
+                    case .running: Tag(text: "触控面已识别", tint: Theme.live)
+                    case .notFound: Tag(text: "未找到触控面", tint: Theme.warning)
+                    case .unavailable(let message): Tag(text: message, tint: Theme.warning)
+                    case .idle: Tag(text: "等待遥控器连接")
+                    }
+                    if !model.config.touch.isEnabled { Tag(text: "已在通用设置中关闭", tint: Theme.warning) }
+                }
+            }
+            Spacer()
+        }
+    }
+}
+
+struct TouchCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var firing: TouchGesture?
+
+    var body: some View {
+        let profileID = model.selectedProfileID
+        let isAppProfile = !model.selectedProfile.isGlobal
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("滑动").eyebrowStyle()
+                Spacer()
+                Text("快速滑过后抬起；按压触控板时不会触发")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 4)
+            rows([.swipeUp, .swipeDown, .swipeLeft, .swipeRight], profileID: profileID, isAppProfile: isAppProfile)
+
+            HStack {
+                Text("转动").eyebrowStyle()
+                Spacer()
+                Text("每转过 \(Int(model.config.touch.rotationStep))° 触发一次，可在「通用」中调整")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 16)
+            rows([.rotateClockwise, .rotateCounterclockwise], profileID: profileID, isAppProfile: isAppProfile)
+        }
+        .onChange(of: model.lastTouch) {
+            guard let gesture = model.lastTouch?.gesture else { return }
+            withAnimation(.easeOut(duration: 0.1)) { firing = gesture }
+            Task {
+                try? await Task.sleep(for: .milliseconds(gesture.isRotation ? 250 : 450))
+                withAnimation(.easeOut(duration: 0.5)) { if firing == gesture { firing = nil } }
+            }
+        }
+    }
+
+    private func rows(_ gestures: [TouchGesture], profileID: UUID, isAppProfile: Bool) -> some View {
+        VStack(spacing: 0) {
+            ForEach(gestures) { gesture in
+                let own = model.ownAction(.touch(gesture), in: profileID)
+                let inherited = own == nil ? model.inheritedTouch(gesture, for: profileID) : nil
+                BindingRow(title: gesture.displayName, detail: gesture.detail, symbol: gesture.symbol,
+                           bound: own ?? inherited,
+                           isInherited: inherited != nil,
+                           isBlocked: false,
+                           isFiring: firing == gesture,
+                           showsDivider: gesture != gestures.last) {
+                    model.editor = EditorContext(profileID: profileID, target: .touch(gesture))
+                } onClear: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        model.setAction(nil, for: .touch(gesture), in: profileID)
+                    }
+                }
+            }
+        }
+        .card()
     }
 }

@@ -18,9 +18,11 @@ struct StageView: View {
             ZStack(alignment: .topLeading) {
                 StageBackground(isLit: !device.pressed.isEmpty, focus: CGPoint(x: proxy.size.width / 2, y: origin.y + geometry.padCenter.y))
 
-                RemoteIllustration(geometry: geometry, pressed: device.pressed, selected: model.selectedButton) { button in
+                RemoteIllustration(geometry: geometry, pressed: device.pressed,
+                                   selected: model.mappingMode == .buttons ? model.selectedButton : nil) { button in
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                         model.tab = .mapping
+                        model.mappingMode = .buttons
                         model.selectedButton = button
                     }
                 }
@@ -40,8 +42,12 @@ struct StageView: View {
                 }
                 .offset(x: origin.x, y: origin.y)
 
-                Callout(button: model.selectedButton, geometry: geometry, origin: origin, stageWidth: proxy.size.width)
-                    .id(model.selectedButton)
+                TouchOverlay(diameter: geometry.padDiameter)
+                    .position(x: origin.x + geometry.padCenter.x, y: origin.y + geometry.padCenter.y)
+
+                let target: CalloutTarget = model.mappingMode == .touch ? .touchSurface : .button(model.selectedButton)
+                Callout(target: target, geometry: geometry, origin: origin, stageWidth: proxy.size.width)
+                    .id(target)
                     .transition(.opacity)
 
                 header
@@ -64,6 +70,11 @@ struct StageView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
+                if device.isConnected, let level = model.engine.battery.level {
+                    BatteryBadge(level: level, onDark: true)
+                        .padding(.trailing, 6)
+                        .transition(.opacity)
+                }
                 if device.isConnected {
                     StatusPill(text: "已连接", color: Theme.live, pulsing: true)
                         .foregroundStyle(.white.opacity(0.85))
@@ -133,21 +144,107 @@ struct Grain: View {
     }
 }
 
+// MARK: - 触点
+
+/// 触控板上的实时触点：发光圆点、拖尾，以及识别出手势时的瞬时符号
+struct TouchOverlay: View {
+    @Environment(AppModel.self) private var model
+    let diameter: CGFloat
+
+    @State private var trail: [CGPoint] = []
+    @State private var flash: TouchPulse?
+    @State private var flashVisible = false
+
+    var body: some View {
+        let contacts = model.engine.touch.contacts
+        ZStack {
+            if trail.count > 1 {
+                Path { path in path.addLines(trail) }
+                    .stroke(LinearGradient(colors: [Theme.glow.opacity(0), Theme.glow.opacity(0.7)],
+                                           startPoint: .init(x: trail.first!.x / diameter, y: trail.first!.y / diameter),
+                                           endPoint: .init(x: trail.last!.x / diameter, y: trail.last!.y / diameter)),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            }
+            ForEach(contacts, id: \.id) { contact in
+                let point = position(contact)
+                ZStack {
+                    Circle().fill(RadialGradient(colors: [Theme.glow.opacity(0.55), .clear], center: .center, startRadius: 0, endRadius: 22))
+                        .frame(width: 44, height: 44)
+                    Circle().fill(.white).frame(width: 9, height: 9)
+                        .shadow(color: Theme.glow, radius: 6)
+                }
+                .position(point)
+                .transition(.scale(scale: 0.4).combined(with: .opacity))
+            }
+            if let flash {
+                Image(systemName: flash.gesture.symbol)
+                    .font(.system(size: diameter * 0.30, weight: .bold))
+                    .foregroundStyle(.white)
+                    .shadow(color: Theme.glow, radius: 14)
+                    .scaleEffect(flashVisible ? 1 : 0.6)
+                    .opacity(flashVisible ? 0.95 : 0)
+                    .id(flash.id)
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .clipShape(Circle())
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.15), value: contacts.map(\.id))
+        .onChange(of: contacts) {
+            guard let first = contacts.first else {
+                withAnimation(.easeOut(duration: 0.35)) { trail = [] }
+                return
+            }
+            trail.append(position(first))
+            if trail.count > 14 { trail.removeFirst(trail.count - 14) }
+        }
+        .onChange(of: model.lastTouch) {
+            guard let pulse = model.lastTouch else { return }
+            flash = pulse
+            flashVisible = false
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.7)) { flashVisible = true }
+            Task {
+                try? await Task.sleep(for: .milliseconds(pulse.gesture.isRotation ? 120 : 260))
+                guard flash?.id == pulse.id else { return }
+                withAnimation(.easeOut(duration: 0.35)) { flashVisible = false }
+            }
+        }
+    }
+
+    /// 触点坐标的 y 轴向上，换算到视图坐标（向下）
+    private func position(_ contact: TouchContact) -> CGPoint {
+        CGPoint(x: contact.x * diameter, y: (1 - contact.y) * diameter)
+    }
+}
+
 // MARK: - 标注
+
+enum CalloutTarget: Hashable {
+    case button(RemoteButton)
+    case touchSurface
+}
 
 /// 从选中部件引出的标注线与说明
 struct Callout: View {
     @Environment(AppModel.self) private var model
-    let button: RemoteButton
+    let target: CalloutTarget
     let geometry: RemoteGeometry
     let origin: CGPoint
     let stageWidth: CGFloat
 
     private let labelWidth: CGFloat = 104
 
+    private var side: CalloutSide {
+        if case .button(let button) = target { return CalloutSide(button) }
+        return .right
+    }
+
     var body: some View {
-        let side = CalloutSide(button)
-        let anchor = geometry.calloutAnchor(of: button, side: side)
+        let side = side
+        let anchor: CGPoint = switch target {
+        case .button(let button): geometry.calloutAnchor(of: button, side: side)
+        case .touchSurface: CGPoint(x: geometry.padCenter.x + geometry.padDiameter / 2, y: geometry.padCenter.y)
+        }
         let start = CGPoint(x: origin.x + anchor.x, y: origin.y + anchor.y)
         let remoteEdge = side == .right ? origin.x + geometry.size.width : origin.x
         let labelX = side == .right ? remoteEdge + 26 : remoteEdge - 26 - labelWidth
@@ -175,7 +272,31 @@ struct Callout: View {
         .allowsHitTesting(false)
     }
 
-    private var label: some View {
+    @ViewBuilder private var label: some View {
+        switch target {
+        case .button(let button): buttonLabel(button)
+        case .touchSurface: touchLabel
+        }
+    }
+
+    private var touchLabel: some View {
+        let profileID = model.selectedProfileID
+        let mapped = TouchGesture.allCases.filter { model.effectiveAction(.touch($0), in: profileID) != nil }.count
+        return VStack(alignment: .leading, spacing: 3) {
+            Text("触控面")
+                .font(Theme.eyebrow(10))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.5))
+            Text(mapped == 0 ? "未映射" : "\(mapped) 个手势")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("滑动 · 转动")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.white.opacity(0.45))
+        }
+    }
+
+    private func buttonLabel(_ button: RemoteButton) -> some View {
         let side = CalloutSide(button)
         let mapping = model.mapping(button, in: model.selectedProfileID) ?? model.inheritedMapping(button, for: model.selectedProfileID)
         let alignment: HorizontalAlignment = side == .right ? .leading : .trailing
@@ -248,7 +369,7 @@ struct EventRow: View {
             Text(entry.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
                 .font(Theme.mono(10.5))
                 .foregroundStyle(.white.opacity(0.32))
-            Image(systemName: entry.button?.symbol ?? "exclamationmark")
+            Image(systemName: entry.button?.symbol ?? entry.touch?.symbol ?? "exclamationmark")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.white.opacity(0.8))
                 .frame(width: 20, height: 20)
@@ -276,6 +397,7 @@ struct EventRow: View {
     }
 
     private var source: String {
+        if let touch = entry.touch { return "触控 · \(touch.displayName)" }
         let name = entry.button?.shortName ?? "系统"
         return entry.gesture.map { "\(name) · \($0.displayName)" } ?? name
     }

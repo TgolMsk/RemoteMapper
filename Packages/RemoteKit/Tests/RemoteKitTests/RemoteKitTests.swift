@@ -198,3 +198,103 @@ final class ManualClock: GestureClock {
         #expect(KeyCombo.option.keycaps == ["⌥"])
     }
 }
+
+@Suite struct TouchTests {
+    /// 生成一串触点帧：沿给定点序列移动，最后抬起
+    func frames(_ points: [(Double, Double)], duration: TimeInterval = 0.3) -> [TouchFrame] {
+        var result: [TouchFrame] = []
+        for (index, point) in points.enumerated() {
+            let time = duration * Double(index) / Double(max(points.count - 1, 1))
+            result.append(TouchFrame(contacts: [TouchContact(id: 1, state: 4, x: point.0, y: point.1)], timestamp: time))
+        }
+        result.append(TouchFrame(contacts: [], timestamp: duration + 0.01))
+        return result
+    }
+
+    func line(from a: (Double, Double), to b: (Double, Double), steps: Int = 12) -> [(Double, Double)] {
+        (0...steps).map { i in
+            let t = Double(i) / Double(steps)
+            return (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)
+        }
+    }
+
+    func arc(degrees: [Double], radius: Double = 0.4) -> [(Double, Double)] {
+        degrees.map { (0.5 + radius * cos($0 * .pi / 180), 0.5 + radius * sin($0 * .pi / 180)) }
+    }
+
+    func recognize(_ frames: [TouchFrame], suppressAt: Int? = nil) -> [TouchGesture] {
+        let recognizer = TouchGestureRecognizer()
+        var output: [TouchGesture] = []
+        recognizer.onGesture = { output.append($0) }
+        for (index, frame) in frames.enumerated() {
+            if index == suppressAt { recognizer.suppressCurrentTouch() }
+            recognizer.handle(frame)
+        }
+        return output
+    }
+
+    @Test func swipesInFourDirections() {
+        #expect(recognize(frames(line(from: (0.5, 0.2), to: (0.5, 0.8)))) == [.swipeUp])
+        #expect(recognize(frames(line(from: (0.5, 0.8), to: (0.5, 0.2)))) == [.swipeDown])
+        #expect(recognize(frames(line(from: (0.2, 0.5), to: (0.8, 0.5)))) == [.swipeRight])
+        #expect(recognize(frames(line(from: (0.8, 0.5), to: (0.2, 0.5)))) == [.swipeLeft])
+    }
+
+    @Test func straightSwipeAlongEdgeIsNotRotation() {
+        // 贴着右边缘竖直上滑，转角接近 100°，但轨迹是直线
+        #expect(recognize(frames(line(from: (0.85, 0.1), to: (0.85, 0.9)))) == [.swipeUp])
+    }
+
+    @Test func shortOrDiagonalMovementIsIgnored() {
+        #expect(recognize(frames(line(from: (0.5, 0.5), to: (0.6, 0.55)))).isEmpty)
+        #expect(recognize(frames(line(from: (0.2, 0.2), to: (0.7, 0.7)))).isEmpty)
+    }
+
+    @Test func slowSwipeIsIgnored() {
+        #expect(recognize(frames(line(from: (0.5, 0.2), to: (0.5, 0.8)), duration: 2)).isEmpty)
+    }
+
+    @Test func rotationEmitsTicksAndNoSwipe() {
+        // 从 90° 顺时针转到 -90°（转过 180°），默认每 30° 一次
+        let clockwise = recognize(frames(arc(degrees: stride(from: 90.0, through: -90, by: -10).map { $0 }), duration: 0.8))
+        #expect(clockwise == Array(repeating: .rotateClockwise, count: 6))
+        let counter = recognize(frames(arc(degrees: stride(from: 0.0, through: 120, by: 10).map { $0 }), duration: 0.8))
+        #expect(counter == Array(repeating: .rotateCounterclockwise, count: 4))
+    }
+
+    @Test func physicalPressSuppressesGesture() {
+        #expect(recognize(frames(line(from: (0.5, 0.2), to: (0.5, 0.8))), suppressAt: 3).isEmpty)
+    }
+}
+
+@Suite struct TouchConfigTests {
+    @Test func resolvesTouchPerApp() {
+        let config = RemoteConfig.default
+        #expect(config.resolve(.swipeLeft, frontmost: KnownApp.iTerm)?.profile.name == "终端")
+        #expect(config.resolve(.swipeUp, frontmost: KnownApp.iTerm)?.profile.isGlobal == true)
+        #expect(config.resolve(.rotateClockwise, frontmost: nil)?.action.action == .scroll(.down, lines: 3))
+    }
+
+    @Test func migratesVersionOneConfig() throws {
+        let json = """
+        {"version": 1, "profiles": [
+            {"name": "全局", "mappings": {}},
+            {"name": "终端", "bundleIDs": ["com.googlecode.iterm2"], "mappings": {}}
+        ]}
+        """
+        var config = try JSONDecoder().decode(RemoteConfig.self, from: Data(json.utf8))
+        let migrated = config.migrate()
+        #expect(migrated)
+        #expect(config.version == RemoteConfig.currentVersion)
+        #expect(config.globalProfile.touchMappings.count == 6)
+        #expect(config.profiles[1].touchMappings[.swipeRight]?.presetID == "system.nextTab")
+        let migratedAgain = config.migrate()
+        #expect(!migratedAgain)
+    }
+
+    @Test func scrollActionIsReadable() throws {
+        let json = String(data: try JSONEncoder().encode(Action.scroll(.down, lines: 3)), encoding: .utf8)!
+        #expect(json.contains("\"direction\":\"down\""))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(json.utf8)) == .scroll(.down, lines: 3))
+    }
+}

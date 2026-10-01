@@ -33,6 +33,21 @@ public enum KeyboardSynth {
         }
     }
 
+    /// 按行滚动：向下即显示下方内容
+    public static func scroll(_ direction: ScrollDirection, lines: Int) {
+        let amount = Int32(max(1, lines))
+        let (vertical, horizontal): (Int32, Int32) = switch direction {
+        case .up: (amount, 0)
+        case .down: (-amount, 0)
+        case .left: (0, amount)
+        case .right: (0, -amount)
+        }
+        guard let event = CGEvent(scrollWheelEvent2Source: source, units: .line, wheelCount: 2,
+                                  wheel1: vertical, wheel2: horizontal, wheel3: 0) else { return }
+        event.setIntegerValueField(.eventSourceUserData, value: eventMarker)
+        event.post(tap: .cghidEventTap)
+    }
+
     static func post(_ combo: KeyCombo, down: Bool, autorepeat: Bool = false) {
         guard let event = CGEvent(keyboardEventSource: source, virtualKey: combo.keyCode, keyDown: down) else { return }
         if let modifierFlag = KeyNames.modifierFlag(for: combo.keyCode) {

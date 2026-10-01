@@ -8,13 +8,16 @@ public struct LogEntry: Identifiable, Hashable, Sendable {
     public let date: Date
     public let button: RemoteButton?
     public let gesture: RemoteGesture?
+    public let touch: TouchGesture?
     public let title: String
     public let kind: Kind
 
-    public init(date: Date = Date(), button: RemoteButton?, gesture: RemoteGesture?, title: String, kind: Kind) {
+    public init(date: Date = Date(), button: RemoteButton?, gesture: RemoteGesture?, touch: TouchGesture? = nil,
+                title: String, kind: Kind) {
         self.date = date
         self.button = button
         self.gesture = gesture
+        self.touch = touch
         self.title = title
         self.kind = kind
     }
@@ -24,6 +27,8 @@ public struct LogEntry: Identifiable, Hashable, Sendable {
 @Observable
 public final class RemoteEngine {
     public let device: RemoteDevice
+    public let touch: TouchSurface
+    public let battery: BatteryMonitor
     public let store: ConfigStore
     @ObservationIgnored public let runner = ActionRunner()
     @ObservationIgnored public let interceptor = MediaKeyInterceptor()
@@ -36,16 +41,23 @@ public final class RemoteEngine {
     @ObservationIgnored public var isPreviewOnly: () -> Bool = { false }
     /// 每次按下遥控器按钮时通知界面
     @ObservationIgnored public var onButtonDown: (RemoteButton) -> Void = { _ in }
+    /// 识别出触控手势时通知界面
+    @ObservationIgnored public var onTouchGesture: (TouchGesture) -> Void = { _ in }
 
     @ObservationIgnored private var gestures: GestureEngine!
+    @ObservationIgnored private let touchRecognizer = TouchGestureRecognizer()
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
     /// 按下时的前台 App；长按、双击在稍后触发，此时前台可能已经切换
     @ObservationIgnored private var pressFrontmost: [RemoteButton: String] = [:]
     private static let logLimit = 40
 
-    public init(store: ConfigStore, device: RemoteDevice = RemoteDevice()) {
+    public init(store: ConfigStore, device: RemoteDevice = RemoteDevice(), touch: TouchSurface = TouchSurface(),
+                battery: BatteryMonitor = BatteryMonitor()) {
         self.store = store
         self.device = device
+        self.touch = touch
+        self.battery = battery
+        touchRecognizer.settings = store.config.touch
         gestures = GestureEngine(timing: store.config.gestureTiming) { [unowned self] button in
             guard let mapping = self.store.config.resolve(button, frontmost: self.pressFrontmost[button])?.mapping else {
                 return .init(gestures: [])
@@ -54,6 +66,21 @@ public final class RemoteEngine {
         }
         gestures.onOutput = { [unowned self] in self.handle($0) }
         device.onButton = { [unowned self] button, isDown in self.handle(button, isDown: isDown) }
+        device.onConnectionChange = { [unowned self] connected in
+            connected ? self.touch.start() : self.touch.stop()
+            self.touchRecognizer.reset()
+            if connected {
+                self.battery.targetName = self.device.productName
+                self.battery.start()
+            } else {
+                self.battery.remoteDisconnected()
+            }
+        }
+        touch.onFrame = { [unowned self] frame in
+            guard self.store.config.touch.isEnabled else { return }
+            self.touchRecognizer.handle(frame)
+        }
+        touchRecognizer.onGesture = { [unowned self] in self.handle(touch: $0) }
         runner.onError = { [unowned self] message in self.append(button: nil, gesture: nil, title: message, kind: .error) }
         interceptor.shouldIntercept = { [unowned self] button in
             let config = self.store.config
@@ -71,6 +98,11 @@ public final class RemoteEngine {
             MainActor.assumeIsolated { self?.frontmostBundleID = app?.bundleIdentifier }
         }
         device.start()
+        if device.isConnected {
+            touch.start()
+            battery.targetName = device.productName
+            battery.start()
+        }
         startInterceptorIfPossible()
     }
 
@@ -82,6 +114,7 @@ public final class RemoteEngine {
     /// 配置变化后调用：同步手势时长，停用时结束进行中的按住动作
     public func configDidChange() {
         gestures.timing = store.config.gestureTiming
+        touchRecognizer.settings = store.config.touch
         if !store.config.isEnabled {
             gestures.reset()
             runner.endAll()
@@ -101,6 +134,8 @@ public final class RemoteEngine {
         if isDown {
             pressFrontmost[button] = frontmostBundleID
             onButtonDown(button)
+            // 按压触控板时手指必然在触控面上，这次触摸不再识别为滑动或转动
+            if button == .select || button.isDirectional { touchRecognizer.suppressCurrentTouch() }
         }
         guard store.config.isEnabled else {
             if isDown { append(button: button, gesture: nil, title: "映射已停用", kind: .passthrough) }
@@ -140,12 +175,30 @@ public final class RemoteEngine {
         }
     }
 
+    private func handle(touch gesture: TouchGesture) {
+        onTouchGesture(gesture)
+        guard store.config.isEnabled else { return }
+        // 连续转动只记录第一条
+        let isContinuation = gesture.isRotation && log.first?.touch == gesture
+            && Date().timeIntervalSince(log.first!.date) < 0.6
+        guard let bound = store.config.resolve(gesture, frontmost: frontmostBundleID)?.action else {
+            if !isContinuation { append(button: nil, gesture: nil, touch: gesture, title: "未映射", kind: .passthrough) }
+            return
+        }
+        let preview = isPreviewOnly()
+        if !preview { runner.perform(bound.action) }
+        if !isContinuation {
+            append(button: nil, gesture: nil, touch: gesture, title: bound.displayTitle, kind: preview ? .preview : .action)
+        }
+    }
+
     private func boundAction(_ button: RemoteButton, _ gesture: RemoteGesture) -> BoundAction? {
         store.config.resolve(button, frontmost: pressFrontmost[button] ?? frontmostBundleID)?.mapping[gesture]
     }
 
-    private func append(button: RemoteButton?, gesture: RemoteGesture?, title: String, kind: LogEntry.Kind) {
-        log.insert(LogEntry(button: button, gesture: gesture, title: title, kind: kind), at: 0)
+    private func append(button: RemoteButton?, gesture: RemoteGesture?, touch: TouchGesture? = nil,
+                        title: String, kind: LogEntry.Kind) {
+        log.insert(LogEntry(button: button, gesture: gesture, touch: touch, title: title, kind: kind), at: 0)
         if log.count > Self.logLimit { log.removeLast(log.count - Self.logLimit) }
     }
 }

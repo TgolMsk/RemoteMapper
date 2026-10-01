@@ -10,7 +10,7 @@ macOS 菜单栏 App，把 Siri Remote 的按键映射为开发工具（Claude Co
 
 ## 架构
 
-- `Packages/RemoteKit`：与 UI 无关的核心。`RemoteDevice`（IOHIDManager 读报告 0xFB）→ `GestureEngine`（单击/双击/长按/按住）→ `RemoteEngine`（按前台 App 解析配置）→ `ActionRunner`（CGEvent、NSWorkspace、子进程）。`MediaKeyInterceptor` 用 CGEventTap 拦截被映射的媒体键。
+- `Packages/RemoteKit`：与 UI 无关的核心。`RemoteDevice`（IOHIDManager 读报告 0xFB）→ `GestureEngine`（单击/双击/长按/按住）→ `RemoteEngine`（按前台 App 解析配置）→ `ActionRunner`（CGEvent、NSWorkspace、子进程）。`MediaKeyInterceptor` 用 CGEventTap 拦截被映射的媒体键。`TouchSurface`（dlsym 加载 MultitouchSupport，按偏移读 96 字节的 MTTouch）→ `TouchGestureRecognizer`（滑动 / 转动）→ `RemoteEngine`。`BatteryMonitor` 用 CoreBluetooth 共享系统已建立的 BLE 连接，读 Battery Level（0x2A19），按 HID 产品名匹配外设。
 - `App/Sources`：SwiftUI。`AppModel` 持有 `ConfigStore` 与 `RemoteEngine`；`AppModel.preview()` 提供截图用的假数据。
 - 两个 target 都开启了默认 MainActor 隔离；IOKit / CGEventTap 的 C 回调写成 `nonisolated` 全局函数，指针以地址形式传入后 `MainActor.assumeIsolated`。
 
@@ -21,8 +21,13 @@ macOS 菜单栏 App，把 Siri Remote 的按键映射为开发工具（Claude Co
 - 配置 JSON 需保持可手写：`Action` 用 `type` 区分，`KeyCombo` 编码为 `{"key": "tab", "modifiers": ["shift"]}`。
 - 设计规范集中在 `App/Sources/Design/Theme.swift`；舞台区域始终是深色。
 
+## 调试
+
+- 运行日志：`/usr/bin/log show --last 5m --info --predicate 'subsystem == "com.ws.RemoteMapper"'`（zsh 里 `log` 是内置命令，必须写完整路径）。
+
 ## 待验证
 
 - 按键位序是从报告描述符推断的，需按实体遥控器核对（诊断页的按键位图）。
 - 遥控器的音量/播放键在 macOS 上是否以 NX_SYSDEFINED 媒体键事件出现（决定拦截是否生效）。
 - Siri 键在 macOS 上是否触发系统 Siri / 听写。
+- 触控：MTTouch 字段偏移与 y 轴方向（假设 y 向上）需用实体遥控器核对（诊断页「触控面 › 当前触点」）。

@@ -187,3 +187,39 @@ struct StatusPill: View {
         }
     }
 }
+
+/// 电池图标：填充长度与电量成比例，低电量时变为橙色
+struct BatteryBadge: View {
+    let level: Int
+    /// 在深色舞台上使用
+    var onDark = false
+
+    var body: some View {
+        let color: Color = level <= 15 ? Theme.warning : (onDark ? .white.opacity(0.8) : .secondary)
+        HStack(spacing: 6) {
+            HStack(spacing: 1) {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .strokeBorder(color.opacity(0.55), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 1.8, style: .continuous)
+                        .fill(color)
+                        .frame(width: max(2, 19 * CGFloat(level) / 100))
+                        .padding(2)
+                }
+                .frame(width: 23, height: 12)
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(color.opacity(0.55))
+                    .frame(width: 1.5, height: 4.5)
+            }
+            Text("\(level)%")
+                .font(.system(size: 11.5, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .fixedSize()
+        }
+        .fixedSize()
+        .help(level <= 15 ? "遥控器电量较低，请及时充电" : "遥控器电量")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("遥控器电量 \(level)%")
+    }
+}

@@ -20,8 +20,10 @@ make install    # Release 版安装到 /Applications（开机自启需要从这�
 ## 功能
 
 - **四种手势**：单击、双击、长按、按住（按下开始、松开结束，用于按住说话）
+- **触控手势**：在触控板上四向滑动、沿外圈顺/逆时针转动（每转过设定角度触发一次，适合滚动）
 - **App 专属配置**：例如在 iTerm / 终端 中让 Siri 键变成 Claude Code 的按住说话，其它 App 中仍是全局设置
-- **动作类型**：快捷键、按住按键（模拟自动重复）、输入文本、打开 App、打开链接、Shell 命令、AppleScript，以及面向 Claude Code / Claude 桌面版 / Codex 的预设
+- **动作类型**：快捷键、按住按键（模拟自动重复）、输入文本、滚动、打开 App、打开链接、Shell 命令、AppleScript，以及面向 Claude Code / Claude 桌面版 / Codex 的预设
+- **电量显示**：通过蓝牙标准电池服务（0x180F）读取遥控器电量，显示在设置窗口与菜单栏，低于 15% 变橙色（首次运行需允许蓝牙权限）
 - **接管系统媒体键**：映射了音量、静音、播放键时，拦截它们原本的系统功能
 - **配置即文件**：`~/Library/Application Support/RemoteMapper/config.json`，外部修改会自动载入
 
@@ -42,4 +44,4 @@ project.yml             XcodeGen 工程描述
 
 Siri Remote（VID `0x004C` / PID `0x0315`）通过 BLE 连接，按键走 Consumer Control 接口的报告 `0xFB`：13 个 1 位字段，顺序为 TV、音量+、音量−、触控板按下、电源、Siri、返回、静音、播放/暂停、上、右、下、左。该顺序取自设备的报告描述符，可在「权限与诊断 › 按键位图」中实时核对。
 
-触控板（Digitizer）、运动传感器、麦克风都是 Apple 私有格式，尚未解析。
+触控面由系统注册为多点触控设备，通过私有框架 MultitouchSupport 读取触点（与 Mac 触控板同一套驱动），因此不能上架 App Store，系统大版本更新后可能需要适配。运动传感器、麦克风是 Apple 私有格式，尚未解析。

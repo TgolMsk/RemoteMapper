@@ -7,12 +7,16 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
     public var name: String
     public var bundleIDs: [String]
     public var mappings: [RemoteButton: ButtonMapping]
+    /// 触控手势的映射，每个手势对应一个动作
+    public var touchMappings: [TouchGesture: BoundAction]
 
-    public init(id: UUID = UUID(), name: String, bundleIDs: [String] = [], mappings: [RemoteButton: ButtonMapping] = [:]) {
+    public init(id: UUID = UUID(), name: String, bundleIDs: [String] = [], mappings: [RemoteButton: ButtonMapping] = [:],
+                touchMappings: [TouchGesture: BoundAction] = [:]) {
         self.id = id
         self.name = name
         self.bundleIDs = bundleIDs
         self.mappings = mappings
+        self.touchMappings = touchMappings
     }
 
     public var isGlobal: Bool { bundleIDs.isEmpty }
@@ -21,7 +25,10 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
         mappings[button].flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private enum CodingKeys: String, CodingKey { case id, name, bundleIDs, mappings }
+    private enum CodingKeys: String, CodingKey {
+        case id, name, bundleIDs, mappings
+        case touchMappings = "touch"
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -29,6 +36,16 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
         name = try c.decode(String.self, forKey: .name)
         bundleIDs = try c.decodeIfPresent([String].self, forKey: .bundleIDs) ?? []
         mappings = try c.decodeIfPresent([RemoteButton: ButtonMapping].self, forKey: .mappings) ?? [:]
+        touchMappings = try c.decodeIfPresent([TouchGesture: BoundAction].self, forKey: .touchMappings) ?? [:]
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(bundleIDs, forKey: .bundleIDs)
+        try c.encode(mappings, forKey: .mappings)
+        if !touchMappings.isEmpty { try c.encode(touchMappings, forKey: .touchMappings) }
     }
 }
 
@@ -39,15 +56,20 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
     public var interceptSystemKeys: Bool
     public var longPressThreshold: Double
     public var doubleTapInterval: Double
+    public var touch: TouchSettings
     public var profiles: [Profile]
 
-    public init(version: Int = 1, isEnabled: Bool = true, interceptSystemKeys: Bool = true,
-                longPressThreshold: Double = 0.45, doubleTapInterval: Double = 0.28, profiles: [Profile]) {
+    public static let currentVersion = 2
+
+    public init(version: Int = RemoteConfig.currentVersion, isEnabled: Bool = true, interceptSystemKeys: Bool = true,
+                longPressThreshold: Double = 0.45, doubleTapInterval: Double = 0.28, touch: TouchSettings = TouchSettings(),
+                profiles: [Profile]) {
         self.version = version
         self.isEnabled = isEnabled
         self.interceptSystemKeys = interceptSystemKeys
         self.longPressThreshold = longPressThreshold
         self.doubleTapInterval = doubleTapInterval
+        self.touch = touch
         self.profiles = profiles
         ensureGlobalProfile()
     }
@@ -78,6 +100,33 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
         return global.mapping(for: button).map { ($0, global) }
     }
 
+    /// 解析触控手势在当前前台 App 下实际生效的动作及其来源配置
+    public func resolve(_ gesture: TouchGesture, frontmost bundleID: String?) -> (action: BoundAction, profile: Profile)? {
+        if let app = appProfile(for: bundleID), let action = app.touchMappings[gesture] {
+            return (action, app)
+        }
+        let global = globalProfile
+        return global.touchMappings[gesture].map { ($0, global) }
+    }
+
+    /// 旧版本配置升级：v1 → v2 补上默认的触控手势映射（只填补空缺，不覆盖已有设置）
+    @discardableResult
+    public mutating func migrate() -> Bool {
+        guard version < Self.currentVersion else { return false }
+        if version < 2 {
+            let defaults = RemoteConfig.default
+            for index in profiles.indices where profiles[index].touchMappings.isEmpty {
+                let profile = profiles[index]
+                let template = profile.isGlobal
+                    ? defaults.globalProfile
+                    : defaults.profiles.first { !$0.isGlobal && !Set($0.bundleIDs).isDisjoint(with: profile.bundleIDs) }
+                profiles[index].touchMappings = template?.touchMappings ?? [:]
+            }
+        }
+        version = Self.currentVersion
+        return true
+    }
+
     public subscript(profileID: UUID) -> Profile? {
         get { profiles.first { $0.id == profileID } }
         set {
@@ -93,17 +142,19 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, isEnabled, interceptSystemKeys, longPressThreshold, doubleTapInterval, profiles
+        case version, isEnabled, interceptSystemKeys, longPressThreshold, doubleTapInterval, touch, profiles
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = RemoteConfig(profiles: [])
-        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? defaults.version
+        // 没有版本号的手写配置视为最新格式
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? Self.currentVersion
         isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? defaults.isEnabled
         interceptSystemKeys = try c.decodeIfPresent(Bool.self, forKey: .interceptSystemKeys) ?? defaults.interceptSystemKeys
         longPressThreshold = try c.decodeIfPresent(Double.self, forKey: .longPressThreshold) ?? defaults.longPressThreshold
         doubleTapInterval = try c.decodeIfPresent(Double.self, forKey: .doubleTapInterval) ?? defaults.doubleTapInterval
+        touch = try c.decodeIfPresent(TouchSettings.self, forKey: .touch) ?? defaults.touch
         profiles = try c.decodeIfPresent([Profile].self, forKey: .profiles) ?? []
         ensureGlobalProfile()
     }
@@ -128,6 +179,14 @@ public extension RemoteConfig {
             .tv: ButtonMapping(tap: preset("claudeDesktop.activate"),
                                doubleTap: preset("system.iTerm"),
                                longPress: preset("codex.activate")),
+        ], touchMappings: [
+            // 与 Mac 触控板的多指手势保持一致
+            .swipeUp: preset("system.missionControl"),
+            .swipeDown: preset("system.appExpose"),
+            .swipeLeft: preset("system.spaceLeft"),
+            .swipeRight: preset("system.spaceRight"),
+            .rotateClockwise: preset("system.scrollDown"),
+            .rotateCounterclockwise: preset("system.scrollUp"),
         ])
 
         let terminal = Profile(name: "终端", bundleIDs: [KnownApp.iTerm, KnownApp.terminal], mappings: [
@@ -135,6 +194,9 @@ public extension RemoteConfig {
             .playPause: ButtonMapping(tap: preset("claudeCode.cycleMode"), longPress: preset("claudeCode.interrupt")),
             .back: ButtonMapping(tap: preset("claudeCode.cancel")),
             .select: ButtonMapping(tap: preset("claudeCode.submit")),
+        ], touchMappings: [
+            .swipeLeft: preset("system.previousTab"),
+            .swipeRight: preset("system.nextTab"),
         ])
 
         return RemoteConfig(profiles: [global, terminal])

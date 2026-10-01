@@ -32,6 +32,18 @@ struct GeneralPane: View {
                                  value: $model.config.doubleTapInterval, range: 0.15...0.5, tint: Theme.live, showsDivider: false)
                 }
 
+                SettingsGroup("触控") {
+                    SettingRow(title: "启用触控手势", detail: "在遥控器触控板上滑动或沿外圈转动来触发动作。", symbol: "hand.draw") {
+                        Toggle("启用触控手势", isOn: $model.config.touch.isEnabled).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
+                    }
+                    TimingSlider(title: "滑动距离", detail: "手指移动超过触控面的这个比例才算滑动。数值越小越灵敏，也越容易误触。",
+                                 value: $model.config.touch.swipeDistance, range: 0.15...0.6, tint: Theme.accent,
+                                 format: { String(format: "%.0f%%", $0 * 100) })
+                    TimingSlider(title: "转动步进", detail: "沿外圈每转过这个角度触发一次。绑定滚动时，数值越小滚得越快。",
+                                 value: $model.config.touch.rotationStep, range: 10...90, tint: Theme.live, showsDivider: false,
+                                 format: { String(format: "%.0f°", $0) }, step: 5)
+                }
+
                 SettingsGroup("启动") {
                     SettingRow(title: "登录时自动启动", detail: "RemoteMapper 只常驻在菜单栏，不占用程序坞。",
                                symbol: "sunrise", showsDivider: false) {
@@ -82,6 +94,9 @@ struct TimingSlider: View {
     let range: ClosedRange<Double>
     let tint: Color
     var showsDivider = true
+    var format: (Double) -> String = { String(format: "%.2f 秒", $0) }
+    /// 拖动时的取值精度
+    var step = 0.01
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,12 +105,12 @@ struct TimingSlider: View {
                     Circle().fill(tint).frame(width: 7, height: 7)
                     Text(title).font(.system(size: 13, weight: .medium))
                     Spacer()
-                    Text(String(format: "%.2f 秒", value))
+                    Text(format(value))
                         .font(Theme.mono(12, weight: .medium))
                         .foregroundStyle(.secondary)
                         .contentTransition(.numericText(value: value))
                 }
-                Slider(value: Binding(get: { value }, set: { value = ($0 * 100).rounded() / 100 }), in: range)
+                Slider(value: Binding(get: { value }, set: { value = ($0 / step).rounded() * step }), in: range)
                     .tint(tint)
                     .controlSize(.small)
                 Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary)

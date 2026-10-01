@@ -37,6 +37,7 @@ targets:
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSAppleEventsUsageDescription: RemoteMapper 需要发送 Apple 事件来执行你绑定到遥控器上的 AppleScript。
+        NSBluetoothAlwaysUsageDescription: RemoteMapper 通过蓝牙读取 Siri Remote 的电量。
         NSHumanReadableCopyright: ""
     entitlements:
       path: App/RemoteMapper.entitlements

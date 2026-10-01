@@ -28,10 +28,19 @@ enum SnapshotRenderer {
             render(SettingsView().environment(pressedModel), size: size, appearance: appearance,
                    to: directory.appending(path: "settings-pressed-\(suffix).png"))
 
-            for (name, button, gesture) in [("preset", RemoteButton.siri, RemoteGesture.hold), ("keystroke", .playPause, .tap)] {
+            let touchModel = AppModel.preview(pressed: [], touches: [TouchContact(id: 1, state: 4, x: 0.78, y: 0.66)])
+            touchModel.mappingMode = .touch
+            render(SettingsView().environment(touchModel), size: size, appearance: appearance,
+                   to: directory.appending(path: "settings-touch-\(suffix).png"))
+
+            let editors: [(String, EditorTarget)] = [("preset", .button(.siri, .hold)), ("keystroke", .button(.playPause, .tap)),
+                                                     ("scroll", .touch(.rotateClockwise))]
+            for (name, target) in editors {
                 let model = AppModel.preview()
                 let terminal = model.config.profiles.first { !$0.isGlobal }!.id
-                let context = EditorContext(profileID: terminal, button: button, gesture: gesture)
+                let profileID = name == "scroll" ? model.config.globalProfile.id : terminal
+                if name == "scroll" { model.setAction(BoundAction(.scroll(.down, lines: 5)), for: target, in: profileID) }
+                let context = EditorContext(profileID: profileID, target: target)
                 render(ActionEditorSheet(context: context).environment(model), size: CGSize(width: 760, height: 600),
                        appearance: appearance, to: directory.appending(path: "editor-\(name)-\(suffix).png"))
             }

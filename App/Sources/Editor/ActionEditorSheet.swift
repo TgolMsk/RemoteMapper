@@ -4,11 +4,11 @@ import SwiftUI
 
 /// 编辑器左侧的分类
 enum EditorKind: String, CaseIterable, Identifiable {
-    case preset, keystroke, holdKey, text, launchApp, openURL, shell, appleScript, sequence
+    case preset, keystroke, holdKey, text, scroll, launchApp, openURL, shell, appleScript, sequence
 
     var id: String { rawValue }
 
-    static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .launchApp, .openURL, .shell, .appleScript]
+    static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .scroll, .launchApp, .openURL, .shell, .appleScript]
 
     var title: String {
         switch self {
@@ -31,6 +31,7 @@ enum EditorKind: String, CaseIterable, Identifiable {
         case .keystroke: .keystroke
         case .holdKey: .holdKey
         case .text: .text
+        case .scroll: .scroll
         case .launchApp: .launchApp
         case .openURL: .openURL
         case .shell: .shell
@@ -49,6 +50,8 @@ struct ActionEditorSheet: View {
     @State private var combo: KeyCombo?
     @State private var text = ""
     @State private var submit = true
+    @State private var scrollDirection: ScrollDirection = .down
+    @State private var scrollLines = 3
     @State private var url = ""
     @State private var bundleID = ""
     @State private var command = ""
@@ -83,11 +86,11 @@ struct ActionEditorSheet: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            KeyGlyph(button: context.button, size: 40)
+            KeyGlyph(symbol: context.target.symbol, size: 40)
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(context.button.displayName) · \(context.gesture.displayName)")
+                Text(context.target.title)
                     .font(.system(size: 16, weight: .semibold))
-                Text(context.gesture.detail)
+                Text(context.target.detail)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -147,11 +150,18 @@ struct ActionEditorSheet: View {
         case .holdKey:
             DetailIntro(title: "按住按键", text: "绑定到「按住」时，遥控器按住期间保持按下，并按系统键盘重复速率发送重复事件；终端里的「按住空格说话」依赖这一点。绑定到其它手势时等同于按一次。")
             KeyRecorder(combo: $combo)
-            if context.gesture != .hold { GestureHint(text: "此动作最适合绑定到「按住」手势。") }
+            if case .touch = context.target {
+                GestureHint(text: "触控手势没有按住阶段，此动作会按一次。")
+            } else if case .button(_, let gesture) = context.target, gesture != .hold {
+                GestureHint(text: "此动作最适合绑定到「按住」手势。")
+            }
         case .text:
             DetailIntro(title: "输入文本", text: "以 Unicode 方式直接输入，不受当前输入法影响。可用于发送常用指令，例如「继续」。")
             CodeField(text: $text, placeholder: "要输入的文字", monospaced: false)
             Toggle("输入后按 ↩ 发送", isOn: $submit).toggleStyle(.checkbox).padding(.top, 4)
+        case .scroll:
+            DetailIntro(title: "滚动", text: "按行滚动前台窗口，向下即显示下方内容。绑定到触控转动时，每转过一个步进滚动一次。")
+            ScrollEditor(direction: $scrollDirection, lines: $scrollLines)
         case .launchApp:
             DetailIntro(title: "打开 App", text: "启动 App，或在已运行时切换到它的窗口。")
             AppPicker(bundleID: $bundleID)
@@ -204,7 +214,7 @@ struct ActionEditorSheet: View {
                     Text(group.displayName).eyebrowStyle()
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         ForEach(Preset.all.filter { $0.group == group }) { preset in
-                            PresetCard(preset: preset, isSelected: presetID == preset.id, gesture: context.gesture)
+                            PresetCard(preset: preset, isSelected: presetID == preset.id, gesture: gesture)
                                 .onTapGesture(count: 2) {
                                     presetID = preset.id
                                     save()
@@ -227,7 +237,7 @@ struct ActionEditorSheet: View {
             Spacer()
             if existing != nil {
                 Button("移除动作", role: .destructive) {
-                    model.setAction(nil, for: context.gesture, button: context.button, in: context.profileID)
+                    model.setAction(nil, for: context.target, in: context.profileID)
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -248,6 +258,12 @@ struct ActionEditorSheet: View {
         .padding(.vertical, 14)
     }
 
+    /// 按键目标对应的手势；触控目标为 nil
+    private var gesture: RemoteGesture? {
+        if case .button(_, let gesture) = context.target { return gesture }
+        return nil
+    }
+
     // MARK: 数据
 
     /// 由当前表单组成的动作；信息不完整时为 nil
@@ -266,6 +282,7 @@ struct ActionEditorSheet: View {
         case .keystroke: return combo.map { bound(.keystroke($0)) }
         case .holdKey: return combo.map { bound(.holdKey($0)) }
         case .text: return text.isEmpty ? nil : bound(.text(text, submit: submit))
+        case .scroll: return bound(.scroll(scrollDirection, lines: scrollLines))
         case .launchApp: return bundleID.isEmpty ? nil : bound(.launchApp(bundleID: bundleID))
         case .openURL:
             let trimmed = url.trimmingCharacters(in: .whitespaces)
@@ -279,15 +296,14 @@ struct ActionEditorSheet: View {
     private func save() {
         guard let draft else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            model.setAction(draft, for: context.gesture, button: context.button, in: context.profileID)
+            model.setAction(draft, for: context.target, in: context.profileID)
         }
         dismiss()
     }
 
     private func load() {
-        let own = model.mapping(context.button, in: context.profileID)
-        let current = (own ?? model.inheritedMapping(context.button, for: context.profileID))?[context.gesture]
-        existing = own?[context.gesture]
+        let current = model.effectiveAction(context.target, in: context.profileID)
+        existing = model.ownAction(context.target, in: context.profileID)
         guard let current else {
             kind = .preset
             return
@@ -303,6 +319,7 @@ struct ActionEditorSheet: View {
         case .keystroke(let value): kind = .keystroke; combo = value
         case .holdKey(let value): kind = .holdKey; combo = value
         case .text(let value, let shouldSubmit): kind = .text; text = value; submit = shouldSubmit
+        case .scroll(let direction, let lines): kind = .scroll; scrollDirection = direction; scrollLines = lines
         case .launchApp(let value): kind = .launchApp; bundleID = value
         case .openURL(let value): kind = .openURL; url = value
         case .shell(let value): kind = .shell; command = value
@@ -371,7 +388,7 @@ struct CodeField: View {
 struct PresetCard: View {
     let preset: Preset
     let isSelected: Bool
-    let gesture: RemoteGesture
+    let gesture: RemoteGesture?
 
     @State private var isHovered = false
 
@@ -425,6 +442,44 @@ struct PresetCard: View {
         .contentShape(.rect)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+}
+
+/// 滚动方向与行数
+struct ScrollEditor: View {
+    @Binding var direction: ScrollDirection
+    @Binding var lines: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                ForEach(ScrollDirection.allCases, id: \.self) { item in
+                    let isSelected = item == direction
+                    Button { direction = item } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: item.symbol).font(.system(size: 18, weight: .semibold))
+                            Text(item.displayName).font(.system(size: 12, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 72)
+                        .foregroundStyle(isSelected ? Theme.accent : .primary)
+                        .background(isSelected ? Theme.accentFill : Theme.card, in: .rect(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(isSelected ? Theme.accent : Theme.cardBorder, lineWidth: isSelected ? 1.5 : 0.5))
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            HStack {
+                Text("每次滚动").font(.system(size: 13, weight: .medium))
+                Spacer()
+                Text("\(lines) 行").font(Theme.mono(13, weight: .medium)).contentTransition(.numericText(value: Double(lines)))
+                Stepper("行数", value: $lines, in: 1...20).labelsHidden()
+            }
+            .card(padding: 14)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.85), value: direction)
     }
 }
 
