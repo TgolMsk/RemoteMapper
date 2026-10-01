@@ -4,6 +4,14 @@
 
 菜单栏常驻、不占程序坞；设置窗口里有一个实时响应的遥控器，按下实体遥控器上的键，界面上对应的键会亮起并被选中。
 
+## 两个版本
+
+| | 官网版 RemoteMapper | App Store 版 RemoteMapper Lite |
+|---|---|---|
+| 发布方式 | Developer ID 签名 + 公证，`make dist` | 沙盒，`make appstore` |
+| 触控手势、Shell、AppleScript | ✅ | — |
+| 按键映射、电量、App 专属配置 | ✅ | ✅ |
+
 ## 快速开始
 
 ```bash

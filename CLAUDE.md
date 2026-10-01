@@ -8,6 +8,12 @@ macOS 菜单栏 App，把 Siri Remote 的按键映射为开发工具（Claude Co
 - `make test`：核心库测试（Swift Testing），改 `Packages/RemoteKit` 后必跑
 - `make snapshot`：把所有界面（深色/浅色）渲染为 PNG 到 `build/snapshots`，改 UI 后用它做视觉自检，不需要屏幕录制权限
 
+## 两个版本
+
+- 官网版 `RemoteMapper`（com.ws.RemoteMapper）：Developer ID 签名 + 公证，`make dist` 发布，功能完整。
+- App Store 版 `RemoteMapperLite`（com.ws.RemoteMapper.Lite）：沙盒，`make appstore` 发布。编译条件 `APP_STORE`，功能差异集中在 `App/Sources/Edition.swift`；不得链接 `RemoteKitTouch`（私有接口）与 `RemoteKitScripts`（外部命令）。
+- 已验证（2026-09-30）：沙盒内读取遥控器按键、读取电量、在用户手动开启辅助功能后模拟按键均可用；沙盒拒绝打开 AppleMultitouchDevice，也无法弹出辅助功能授权框。
+
 ## 架构
 
 - `Packages/RemoteKit`：与 UI 无关的核心。`RemoteDevice`（IOHIDManager 读报告 0xFB）→ `GestureEngine`（单击/双击/长按/按住）→ `RemoteEngine`（按前台 App 解析配置）→ `ActionRunner`（CGEvent、NSWorkspace、子进程）。`MediaKeyInterceptor` 用 CGEventTap 拦截被映射的媒体键。`TouchSurface`（dlsym 加载 MultitouchSupport，按偏移读 96 字节的 MTTouch）→ `TouchGestureRecognizer`（滑动 / 转动）→ `RemoteEngine`。`BatteryMonitor` 用 CoreBluetooth 共享系统已建立的 BLE 连接，读 Battery Level（0x2A19），按 HID 产品名匹配外设。
