@@ -110,6 +110,9 @@ public final class ActionRunner {
             }
             if let message = await scriptExecutor(action) { onError(message) }
 
+        case .dotCall(let operation):
+            if let message = await DotCall.perform(operation) { onError(message) }
+
         case .sequence(let actions):
             for step in actions { await execute(step) }
 

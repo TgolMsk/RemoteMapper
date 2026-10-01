@@ -21,6 +21,8 @@ public indirect enum Action: Hashable, Sendable {
     case shell(String)
     /// 执行 AppleScript
     case appleScript(String)
+    /// 操作 ChatGPT 桌面版里 dot 的语音通话：通过辅助功能点击 dot 页面上的通话按钮
+    case dotCall(DotCallOperation)
     /// 依次执行多个动作
     case sequence([Action])
     /// 在组合动作中等待
@@ -37,13 +39,14 @@ public indirect enum Action: Hashable, Sendable {
         case .launchApp: .launchApp
         case .shell: .shell
         case .appleScript: .appleScript
+        case .dotCall: .dotCall
         case .sequence: .sequence
         case .delay: .delay
         }
     }
 
     public enum Kind: String, CaseIterable, Sendable, Codable {
-        case keystroke, holdKey, text, scroll, dictation, openURL, launchApp, shell, appleScript, sequence, delay
+        case keystroke, holdKey, text, scroll, dictation, openURL, launchApp, shell, appleScript, dotCall, sequence, delay
 
         public var displayName: String {
             switch self {
@@ -56,6 +59,7 @@ public indirect enum Action: Hashable, Sendable {
             case .launchApp: "打开 App"
             case .shell: "Shell 命令"
             case .appleScript: "AppleScript"
+            case .dotCall: "dot 通话"
             case .sequence: "组合动作"
             case .delay: "等待"
             }
@@ -72,6 +76,7 @@ public indirect enum Action: Hashable, Sendable {
             case .launchApp: "app.badge"
             case .shell: "terminal"
             case .appleScript: "applescript"
+            case .dotCall: "phone.fill"
             case .sequence: "list.number"
             case .delay: "hourglass"
             }
@@ -81,7 +86,7 @@ public indirect enum Action: Hashable, Sendable {
 
 extension Action: Codable {
     private enum CodingKeys: String, CodingKey {
-        case type, key, keyCode, modifiers, text, submit, direction, lines, url, bundleID, command, source, actions, ms
+        case type, key, keyCode, modifiers, text, submit, direction, lines, url, bundleID, command, source, operation, actions, ms
     }
 
     public init(from decoder: Decoder) throws {
@@ -102,6 +107,7 @@ extension Action: Codable {
         case .launchApp: self = .launchApp(bundleID: try c.decode(String.self, forKey: .bundleID))
         case .shell: self = .shell(try c.decode(String.self, forKey: .command))
         case .appleScript: self = .appleScript(try c.decode(String.self, forKey: .source))
+        case .dotCall: self = .dotCall(try c.decodeIfPresent(DotCallOperation.self, forKey: .operation) ?? .toggle)
         case .sequence: self = .sequence(try c.decode([Action].self, forKey: .actions))
         case .delay: self = .delay(milliseconds: try c.decode(Int.self, forKey: .ms))
         }
@@ -124,6 +130,7 @@ extension Action: Codable {
         case .launchApp(let bundleID): try c.encode(bundleID, forKey: .bundleID)
         case .shell(let command): try c.encode(command, forKey: .command)
         case .appleScript(let source): try c.encode(source, forKey: .source)
+        case .dotCall(let operation): try c.encode(operation, forKey: .operation)
         case .sequence(let actions): try c.encode(actions, forKey: .actions)
         case .delay(let ms): try c.encode(ms, forKey: .ms)
         }
@@ -182,6 +189,7 @@ public extension Action {
         case .launchApp(let bundleID): bundleID
         case .shell(let command): command.split(separator: "\n").first.map(String.init) ?? ""
         case .appleScript(let source): source.split(separator: "\n").first.map(String.init) ?? ""
+        case .dotCall(let operation): "dot · \(operation.displayName)"
         case .sequence(let actions): actions.filter { $0.kind != .delay }.map(\.summary).joined(separator: " → ")
         case .delay(let ms): "\(ms) ms"
         }

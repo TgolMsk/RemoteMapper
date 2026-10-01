@@ -18,8 +18,9 @@ enum Edition {
 
     /// 触控手势依赖私有框架 MultitouchSupport
     static let supportsTouch = !isAppStore
-    /// Shell 命令与 AppleScript 在沙盒中无法正常工作，也不符合审核要求
-    static let unsupportedActions: Set<Action.Kind> = isAppStore ? [.shell, .appleScript] : []
+    /// Shell 命令与 AppleScript 在沙盒中无法正常工作，也不符合审核要求；
+    /// dot 通话要读取 ~/.codex 并用辅助功能操作 ChatGPT 的界面，沙盒内同样不可行
+    static let unsupportedActions: Set<Action.Kind> = isAppStore ? [.shell, .appleScript, .dotCall] : []
 
     static var scriptExecutor: ((Action) async -> String?)? {
         #if APP_STORE

@@ -11,7 +11,7 @@ public enum KnownApp {
 /// 面向开发工具的预设动作。
 public struct Preset: Identifiable, Sendable {
     public enum Group: String, CaseIterable, Sendable {
-        case voice, claudeCode, claudeDesktop, codex, system
+        case voice, claudeCode, claudeDesktop, codex, dot, system
 
         public var displayName: String {
             switch self {
@@ -19,6 +19,7 @@ public struct Preset: Identifiable, Sendable {
             case .claudeCode: "Claude Code · 终端"
             case .claudeDesktop: "Claude 桌面版"
             case .codex: "Codex"
+            case .dot: "ChatGPT · dot"
             case .system: "系统"
             }
         }
@@ -85,6 +86,17 @@ public struct Preset: Identifiable, Sendable {
         Preset(id: "codex.open", group: .codex, title: "打开 codex://",
                detail: "通过 URL Scheme 唤起 Codex", symbol: "link",
                action: .openURL("codex://"), preferredGesture: nil),
+
+        // ChatGPT dot：没有官方接口，通过辅助功能点击 dot 页面上的通话按钮，仅官网版可用
+        Preset(id: "dot.toggleCall", group: .dot, title: "呼叫 / 挂断 dot",
+               detail: "没有通话时呼叫 dot，通话中再按一次挂断", symbol: "phone.arrow.up.right.fill",
+               action: .dotCall(.toggle), preferredGesture: nil),
+        Preset(id: "dot.hangUp", group: .dot, title: "挂断 dot",
+               detail: "结束当前与 dot 的通话", symbol: "phone.down.fill",
+               action: .dotCall(.hangUp), preferredGesture: nil),
+        Preset(id: "dot.toggleMute", group: .dot, title: "dot 通话静音",
+               detail: "切换通话中的麦克风静音", symbol: "mic.slash.fill",
+               action: .dotCall(.toggleMute), preferredGesture: nil),
 
         // 系统
         Preset(id: "system.iTerm", group: .system, title: "切换到 iTerm",

@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import Testing
 @testable import RemoteKit
@@ -351,5 +352,92 @@ final class ManualClock: GestureClock {
         let usb = AudioInputDevice(id: 124, uid: "USB-Mic", name: "USB")
         #expect(try AudioInputDevices.resolve(uid: remote.uid, devices: [usb, remote], defaultInput: usb) == remote)
         #expect(try AudioInputDevices.resolve(uid: nil, devices: [usb, remote], defaultInput: usb) == usb)
+    }
+}
+
+@Suite struct DotCallTests {
+    @Test func dotCallActionIsReadable() throws {
+        let json = String(data: try JSONEncoder().encode(Action.dotCall(.hangUp)), encoding: .utf8)!
+        #expect(json.contains("\"type\":\"dotCall\""))
+        #expect(json.contains("\"operation\":\"hangUp\""))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(json.utf8)) == .dotCall(.hangUp))
+        let plain = try JSONDecoder().decode(Action.self, from: Data(#"{"type":"dotCall"}"#.utf8))
+        #expect(plain == .dotCall(.toggle))
+    }
+
+    @Test func presetsCoverCallAndMute() {
+        #expect(Preset.find("dot.toggleCall")?.action == .dotCall(.toggle))
+        #expect(Preset.find("dot.hangUp")?.action == .dotCall(.hangUp))
+        #expect(Preset.find("dot.toggleMute")?.action == .dotCall(.toggleMute))
+        #expect(Preset.all.filter { $0.group == .dot }.allSatisfy { $0.action.kind == .dotCall })
+    }
+
+    @Test func matchesButtonLabelsInBothLanguages() {
+        // 中文界面下 Start call / Hang up 未翻译，静音按钮是中文
+        #expect(DotCall.matches(["Start call", "Start call"], DotCall.startLabels))
+        #expect(DotCall.matches(["拨打电话"], DotCall.startLabels))
+        #expect(DotCall.matches(["Hang up"], DotCall.hangUpLabels))
+        #expect(DotCall.matches(["将麦克风静音"], DotCall.muteLabels))
+        #expect(DotCall.matches(["取消麦克风静音"], DotCall.muteLabels))
+        #expect(!DotCall.matches(["Start call"], DotCall.hangUpLabels))
+        #expect(!DotCall.matches(["开始新的语音聊天"], DotCall.startLabels))
+    }
+
+    @Test func recognizesSidebarRow() {
+        #expect(DotCall.isSidebarRow(["嗨宝"], dotName: "嗨宝"))
+        #expect(DotCall.isSidebarRow(["嗨宝 Call in progress"], dotName: "嗨宝"))
+        #expect(!DotCall.isSidebarRow(["嗨宝的周报"], dotName: "嗨宝"))
+        #expect(DotCall.isCallInProgress(["嗨宝 Call in progress"]))
+        #expect(!DotCall.isCallInProgress(["嗨宝"]))
+    }
+
+    private func node(_ label: String, enabled: Bool = true) -> AXNode {
+        AXNode(element: AXUIElementCreateApplication(getpid()), labels: [label, label], isEnabled: enabled)
+    }
+
+    private func pressed(_ decision: DotCall.Decision) -> String? {
+        if case .press(let node) = decision { return node.labels.first }
+        return nil
+    }
+
+    @Test func toggleHangsUpWhenInCallOtherwiseCalls() {
+        let inCall = [node("嗨宝 Call in progress"), node("Start call", enabled: false), node("将麦克风静音"), node("Hang up")]
+        #expect(pressed(DotCall.decide(.toggle, inCall, dotName: "嗨宝")) == "Hang up")
+        let idle = [node("嗨宝"), node("Start call")]
+        #expect(pressed(DotCall.decide(.toggle, idle, dotName: "嗨宝")) == "Start call")
+        // 侧边栏显示通话中，但当前不在 dot 页面：要切过去，不能点呼叫
+        let elsewhere = [node("嗨宝 Call in progress"), node("新聊天")]
+        if case .missing = DotCall.decide(.toggle, elsewhere, dotName: "嗨宝") {} else { Issue.record("应切到 dot 页面") }
+    }
+
+    @Test func startDoesNothingDuringCall() {
+        if case .alreadyDone = DotCall.decide(.start, [node("Hang up")], dotName: nil) {} else { Issue.record("通话中不应再呼叫") }
+        // 呼叫按钮不可用时不点
+        if case .missing = DotCall.decide(.start, [node("Start call", enabled: false)], dotName: nil) {} else {
+            Issue.record("不可用的按钮不应点击")
+        }
+    }
+
+    @Test func hangUpWithoutCallReturnsQuickly() {
+        // 侧边栏能看到 dot 且没在通话：直接返回，不必切到 dot 页面等待
+        if case .noCall = DotCall.decide(.hangUp, [node("嗨宝"), node("新聊天")], dotName: "嗨宝") {} else { Issue.record("应判定为没有通话") }
+        if case .noCall = DotCall.decide(.toggleMute, [node("嗨宝")], dotName: "嗨宝") {} else { Issue.record("应判定为没有通话") }
+        // 不知道 dot 名字时只能切过去看
+        if case .missing = DotCall.decide(.hangUp, [node("嗨宝")], dotName: nil) {} else { Issue.record("应切到 dot 页面") }
+        #expect(pressed(DotCall.decide(.toggleMute, [node("取消麦克风静音")], dotName: "嗨宝")) == "取消麦克风静音")
+    }
+
+    @Test func readsPrimaryDotNameFromChatGPTState() {
+        let state = #"""
+        {"electron-persisted-atom-state": {
+          "primary-aeon-selection-v1": {"response": {"selection": {"thread_id": "t1"}}},
+          "cloud-aeon-sidebar-cache-v1": {"profilesByThreadId": {
+            "t0": {"display_name": "别的 dot"},
+            "t1": {"display_name": "嗨宝"}
+          }}
+        }}
+        """#
+        #expect(DotCall.primaryDotName(fromGlobalState: Data(state.utf8)) == "嗨宝")
+        #expect(DotCall.primaryDotName(fromGlobalState: Data("{}".utf8)) == nil)
     }
 }

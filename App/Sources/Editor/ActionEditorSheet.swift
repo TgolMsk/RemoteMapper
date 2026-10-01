@@ -215,13 +215,16 @@ struct ActionEditorSheet: View {
         }
     }
 
+    /// 当前版本可用的预设（App Store 版去掉 dot 通话等不支持的动作）
+    private static let availablePresets = Preset.all.filter { !Edition.unsupportedActions.contains($0.action.kind) }
+
     private var presetGrid: some View {
         VStack(alignment: .leading, spacing: 22) {
-            ForEach(Preset.Group.allCases, id: \.self) { group in
+            ForEach(Preset.Group.allCases.filter { group in Self.availablePresets.contains { $0.group == group } }, id: \.self) { group in
                 VStack(alignment: .leading, spacing: 10) {
                     Text(group.displayName).eyebrowStyle()
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        ForEach(Preset.all.filter { $0.group == group }) { preset in
+                        ForEach(Self.availablePresets.filter { $0.group == group }) { preset in
                             PresetCard(preset: preset, isSelected: presetID == preset.id, gesture: gesture)
                                 .onTapGesture(count: 2) {
                                     presetID = preset.id
@@ -334,6 +337,10 @@ struct ActionEditorSheet: View {
         case .openURL(let value): kind = .openURL; url = value
         case .shell(let value): kind = .shell; command = value
         case .appleScript(let value): kind = .appleScript; script = value
+        case .dotCall:
+            // dot 通话只通过预设编辑；手写配置里的同类动作对应到同一个预设
+            kind = .preset
+            presetID = Preset.all.first { $0.action == current.action }?.id
         case .sequence(let steps): kind = .sequence; sequence = steps
         case .delay: kind = .preset
         }

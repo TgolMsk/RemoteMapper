@@ -43,6 +43,7 @@ Opus 源码、构建提交及 SHA-256 校验和。云端测试不替代实体遥
 - **触控手势**：在触控板上四向滑动、沿外圈顺/逆时针转动（每转过设定角度触发一次，适合滚动）
 - **App 专属配置**：例如在 iTerm / 终端 中让 Siri 键变成 Claude Code 的按住说话，其它 App 中仍是全局设置
 - **动作类型**：快捷键、按住按键（模拟自动重复）、输入文本、滚动、打开 App、打开链接、Shell 命令、AppleScript，以及面向 Claude Code / Claude 桌面版 / Codex 的预设
+- **ChatGPT dot 通话**（官网版）：一键呼叫 / 挂断 dot、切换通话静音。ChatGPT 没有提供相应接口，靠辅助功能找到 dot 页面上的通话按钮并模拟点击：不在 dot 页面时会先点侧边栏切过去，点完把鼠标和前台 App 恢复原样。依赖 ChatGPT 的界面文案，ChatGPT 改版后可能需要更新
 - **电量显示**：通过蓝牙标准电池服务（0x180F）读取遥控器电量，显示在设置窗口与菜单栏，低于 15% 变橙色（首次运行需允许蓝牙权限）
 - **接管系统媒体键**：映射了音量、静音、播放键时，拦截它们原本的系统功能
 - **配置即文件**：`~/Library/Application Support/RemoteMapper/config.json`，外部修改会自动载入
@@ -56,6 +57,7 @@ App/                    SwiftUI 应用（菜单栏 + 设置窗口）
   Sources/Editor/       动作编辑器
 Packages/RemoteKit/     核心库：HID 读取、手势识别、动作执行、配置
 Tools/RemoteProbe.swift 原始 HID 探针
+Tools/dotcall.swift     ChatGPT dot 通话命令行工具（make dotcall），也用于核对按钮标签
 scripts/make-icon.swift 图标绘制脚本
 project.yml             XcodeGen 工程描述
 ```

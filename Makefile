@@ -3,7 +3,7 @@ LITE_APP := "build/DerivedData/Build/Products/Debug/RemoteMapper Lite.app"
 RELEASE_APP := build/DerivedData/Build/Products/Release/RemoteMapper.app
 XCODEBUILD := xcodebuild -project RemoteMapper.xcodeproj -scheme RemoteMapper -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData
 
-.PHONY: project build build-lite run run-lite test snapshot snapshot-lite icon probe release install dist appstore clean
+.PHONY: project build build-lite run run-lite test snapshot snapshot-lite icon probe dotcall release install dist appstore clean
 
 project:            ## 由 project.yml 生成 Xcode 工程
 	xcodegen generate
@@ -42,6 +42,10 @@ icon:               ## 重新绘制 App 图标
 
 probe:              ## 运行原始 HID 探针，打印遥控器的原始报告
 	swift Tools/RemoteProbe.swift
+
+dotcall:            ## 编译 ChatGPT dot 通话命令行工具到 build/dotcall（排查按钮标签：build/dotcall dump）
+	@mkdir -p build
+	swiftc -O Tools/dotcall.swift -o build/dotcall
 
 release: mic-build project    ## 编译 Release 版
 	$(XCODEBUILD) -configuration Release build -quiet

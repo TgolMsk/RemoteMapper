@@ -31,6 +31,7 @@ enum Theme {
         case .claudeCode: accent
         case .claudeDesktop: Color(.sRGB, red: 0.85, green: 0.47, blue: 0.34)
         case .codex: Color(.sRGB, red: 0.16, green: 0.66, blue: 0.58)
+        case .dot: Color(.sRGB, red: 0.56, green: 0.43, blue: 0.88)
         case .system: Color(.sRGB, red: 0.48, green: 0.50, blue: 0.56)
         case nil: accent
         }
