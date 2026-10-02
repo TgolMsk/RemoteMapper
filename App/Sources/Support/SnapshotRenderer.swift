@@ -4,12 +4,9 @@ import SwiftUI
 
 /// 以 `--snapshot <目录>` 启动时，把各界面渲染成 PNG 后退出，用于不依赖屏幕录制权限的视觉自检。
 enum SnapshotRenderer {
-    static func renderAll(to requested: URL) {
-        // 沙盒版只能写入自己的容器，改写到容器内的临时目录，由调用方复制出来
-        let directory = Edition.isAppStore ? FileManager.default.temporaryDirectory.appending(path: "snapshots") : requested
+    static func renderAll(to directory: URL) {
         try? FileManager.default.removeItem(at: directory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { print("SNAPSHOT_DIR=\(directory.path)") }
         let size = SettingsWindow.size
 
         for appearance in [NSAppearance.Name.darkAqua, .aqua] {
@@ -35,12 +32,10 @@ enum SnapshotRenderer {
             render(SettingsView().environment(pressedModel), size: size, appearance: appearance,
                    to: directory.appending(path: "settings-pressed-\(suffix).png"))
 
-            if Edition.supportsTouch {
-                let touchModel = AppModel.preview(pressed: [], touches: [TouchContact(id: 1, state: 4, x: 0.78, y: 0.66)])
-                touchModel.mappingMode = .touch
-                render(SettingsView().environment(touchModel), size: size, appearance: appearance,
-                       to: directory.appending(path: "settings-touch-\(suffix).png"))
-            }
+            let touchModel = AppModel.preview(pressed: [], touches: [TouchContact(id: 1, state: 4, x: 0.78, y: 0.66)])
+            touchModel.mappingMode = .touch
+            render(SettingsView().environment(touchModel), size: size, appearance: appearance,
+                   to: directory.appending(path: "settings-touch-\(suffix).png"))
 
             let editors: [(String, EditorTarget)] = [("preset", .button(.siri, .hold)), ("keystroke", .button(.playPause, .tap)),
                                                      ("scroll", .touch(.rotateClockwise))]

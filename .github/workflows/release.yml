@@ -63,7 +63,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           cat > build/release/cloud/release-notes.md <<EOF
-          RemoteMapper 完整版，适用 Apple Silicon / macOS 26+。不构建 Lite 版。
+          RemoteMapper 完整版，适用 Apple Silicon / macOS 26+。
 
           下载 \`RemoteMapper-*-macOS-arm64.dmg\`，将 App 拖入「应用程序」。
           包含按键映射、触控手势、Shell/AppleScript、语音输入与独立遥控器音频组件。

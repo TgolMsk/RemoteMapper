@@ -2,43 +2,43 @@ import AppKit
 import RemoteKit
 import SwiftUI
 
-/// 触控板在光标、滚轮、手势之间切换时，在屏幕下方短暂显示当前状态。
-/// 用遥控器切换时看不到设置界面，没有提示就不知道现在滑动是移动光标还是滚动
-final class PointerModeToast {
-    enum State: Equatable {
+/// 屏幕下方的短暂提示：触控板在光标、滚轮、手势之间切换，以及引擎发出的状态消息（例如电源菜单的选项）。
+/// 用遥控器操作时看不到设置界面，没有提示就不知道当前状态
+final class StatusToast {
+    struct Content: Equatable {
+        var symbol: String
+        var title: String
+        var detail: String?
+    }
+
+    private enum PointerState: Equatable {
         case cursor, wheel, gestures
 
-        var title: String {
+        var content: Content {
             switch self {
-            case .cursor: "光标"
-            case .wheel: "滚轮 · 滑动翻页"
-            case .gestures: "触控手势"
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .cursor: "cursorarrow"
-            case .wheel: "scroll"
-            case .gestures: "hand.draw"
+            case .cursor: Content(symbol: "cursorarrow", title: "光标")
+            case .wheel: Content(symbol: "scroll", title: "滚轮 · 滑动翻页")
+            case .gestures: Content(symbol: "hand.draw", title: "触控手势")
             }
         }
     }
 
     private let model: AppModel
     private var panel: NSPanel?
-    private var host: NSHostingView<PointerModeToastView>?
+    private var host: NSHostingView<StatusToastView>?
     private var hideTask: Task<Void, Never>?
-    private var last: State
-    private static let size = CGSize(width: 320, height: 96)
+    private var lastPointerState: PointerState
+    private var lastMessageID: UUID?
+    private static let size = CGSize(width: 460, height: 120)
 
     init(model: AppModel) {
         self.model = model
-        last = Self.state(of: model)
+        lastPointerState = Self.pointerState(of: model)
+        lastMessageID = model.engine.statusMessage?.id
         observe()
     }
 
-    private static func state(of model: AppModel) -> State {
+    private static func pointerState(of model: AppModel) -> PointerState {
         guard model.config.touch.mode == .pointer else { return .gestures }
         return model.engine.isPointerScrolling ? .wheel : .cursor
     }
@@ -47,6 +47,7 @@ final class PointerModeToast {
         withObservationTracking {
             _ = model.engine.isPointerScrolling
             _ = model.config.touch.mode
+            _ = model.engine.statusMessage
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.changed()
@@ -56,17 +57,22 @@ final class PointerModeToast {
     }
 
     private func changed() {
-        let state = Self.state(of: model)
-        guard state != last else { return }
-        last = state
+        if let message = model.engine.statusMessage, message.id != lastMessageID {
+            lastMessageID = message.id
+            show(Content(symbol: message.symbol, title: message.title, detail: message.detail), for: message.duration)
+            return
+        }
+        let state = Self.pointerState(of: model)
+        guard state != lastPointerState else { return }
+        lastPointerState = state
         guard model.config.isEnabled, model.config.touch.isEnabled else { return }
-        show(state)
+        show(state.content, for: 1.1)
     }
 
-    private func show(_ state: State) {
+    private func show(_ content: Content, for duration: TimeInterval) {
         let panel = panel ?? makePanel()
         self.panel = panel
-        host?.rootView = PointerModeToastView(state: state)
+        host?.rootView = StatusToastView(content: content)
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let frame = screen?.visibleFrame {
             panel.setFrameOrigin(CGPoint(x: frame.midX - Self.size.width / 2, y: frame.minY + 56))
@@ -81,7 +87,7 @@ final class PointerModeToast {
         }
         hideTask?.cancel()
         hideTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.1))
+            try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled else { return }
             self?.hide()
         }
@@ -109,7 +115,7 @@ final class PointerModeToast {
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        let host = NSHostingView(rootView: PointerModeToastView(state: last))
+        let host = NSHostingView(rootView: StatusToastView(content: lastPointerState.content))
         host.frame = CGRect(origin: .zero, size: Self.size)
         panel.contentView = host
         self.host = host
@@ -118,16 +124,23 @@ final class PointerModeToast {
 }
 
 /// 提示内容，样式与语音输入浮窗一致
-struct PointerModeToastView: View {
-    let state: PointerModeToast.State
+struct StatusToastView: View {
+    let content: StatusToast.Content
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: state.symbol)
+            Image(systemName: content.symbol)
                 .font(.system(size: 15, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
-            Text(state.title)
-                .font(.system(size: 14, weight: .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(content.title)
+                    .font(.system(size: 14, weight: .semibold))
+                if let detail = content.detail {
+                    Text(detail)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 20)

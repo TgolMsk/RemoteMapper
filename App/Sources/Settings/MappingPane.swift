@@ -11,9 +11,9 @@ struct MappingPane: View {
             VStack(alignment: .leading, spacing: 26) {
                 if !model.hasAccessibility { AccessibilityBanner() }
                 ProfileStrip()
-                if Edition.supportsTouch, model.selectedProfile.isPointerMode { PointerModeSwitch() }
-                if Edition.supportsTouch { MappingModeSwitch() }
-                switch Edition.supportsTouch ? model.mappingMode : .buttons {
+                if model.selectedProfile.isPointerMode { PointerModeSwitch() }
+                MappingModeSwitch()
+                switch model.mappingMode {
                 case .buttons:
                     ButtonHeader(button: model.selectedButton)
                     GestureCard(button: model.selectedButton)
@@ -56,9 +56,7 @@ struct AccessibilityBanner: View {
                 .background(Theme.warning.gradient, in: .rect(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("需要「辅助功能」权限").font(.system(size: 13, weight: .semibold))
-                Text(Edition.isAppStore
-                     ? "在「系统设置 › 隐私与安全性 › 辅助功能」中打开 \(Edition.name)，才能模拟按键。"
-                     : "授权后才能模拟按键、拦截系统媒体键。打开链接、运行命令不受影响。")
+                Text("授权后才能模拟按键、拦截系统媒体键。打开链接、运行命令不受影响。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
             }
@@ -84,8 +82,7 @@ struct ProfileStrip: View {
             Text("配置").eyebrowStyle().padding(.horizontal, 4)
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
-                    // App Store 版没有触控面，不显示鼠标模式配置
-                    ForEach(model.config.profiles.filter { Edition.supportsTouch || !$0.isPointerMode }) { profile in
+                    ForEach(model.config.profiles) { profile in
                         ProfilePill(profile: profile,
                                     isSelected: profile.id == model.selectedProfileID,
                                     isActive: profile.id == model.activeProfile.id && model.config.isEnabled)

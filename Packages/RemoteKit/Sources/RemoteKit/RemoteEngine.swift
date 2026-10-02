@@ -23,11 +23,27 @@ public struct LogEntry: Identifiable, Hashable, Sendable {
     }
 }
 
+/// 需要在屏幕上短暂告知用户的状态，例如电源菜单的选项
+public struct StatusMessage: Equatable, Sendable {
+    public let id = UUID()
+    public var symbol: String
+    public var title: String
+    public var detail: String?
+    public var duration: TimeInterval
+
+    public init(symbol: String, title: String, detail: String? = nil, duration: TimeInterval) {
+        self.symbol = symbol
+        self.title = title
+        self.detail = detail
+        self.duration = duration
+    }
+}
+
 /// 串起设备、手势识别、配置解析与动作执行。
 @Observable
 public final class RemoteEngine {
     public let device: RemoteDevice
-    /// 官网版为 MultitouchSupport 触控面；App Store 版为 nil
+    /// MultitouchSupport 触控面；为 nil 时不处理触控（测试）
     public let touch: (any TouchSource)?
     public let battery: BatteryMonitor
     public let dictation = VoiceDictation()
@@ -40,6 +56,10 @@ public final class RemoteEngine {
     public private(set) var frontmostBundleID: String?
     /// 鼠标模式下触控板是否处于滚轮状态
     public private(set) var isPointerScrolling = false
+    /// 最近一条需要在屏幕上提示的状态
+    public private(set) var statusMessage: StatusMessage?
+    /// 电源菜单弹出后等待选择的时长
+    public static let powerMenuTimeout: TimeInterval = 4
     public private(set) var log: [LogEntry] = []
     public private(set) var interceptorRunning = false
 
@@ -57,11 +77,16 @@ public final class RemoteEngine {
     @ObservationIgnored private var pressFrontmost: [RemoteButton: String] = [:]
     /// 没有辅助功能权限时移动光标会被系统丢弃，只提示一次
     @ObservationIgnored private var warnedPointerAccess = false
+    /// 电源菜单：由哪个键弹出，以及超时取消的定时器
+    @ObservationIgnored private var powerMenu: (button: RemoteButton, timer: GestureTimer)?
+    @ObservationIgnored private let clock: GestureClock
     private static let logLimit = 40
 
     public init(store: ConfigStore, device: RemoteDevice = RemoteDevice(), touch: (any TouchSource)? = nil,
-                battery: BatteryMonitor = BatteryMonitor(), pointerOutput: PointerOutput = CGPointerOutput()) {
+                battery: BatteryMonitor = BatteryMonitor(), pointerOutput: PointerOutput = CGPointerOutput(),
+                clock: GestureClock = DispatchGestureClock()) {
         self.store = store
+        self.clock = clock
         self.device = device
         self.touch = touch
         self.battery = battery
@@ -71,7 +96,7 @@ public final class RemoteEngine {
         runner.pointer = pointer
         pointer.onScrollingChange = { [unowned self] in self.isPointerScrolling = $0 }
         dictation.settings = store.config.voice
-        gestures = GestureEngine(timing: store.config.gestureTiming) { [unowned self] button in
+        gestures = GestureEngine(timing: store.config.gestureTiming, clock: clock) { [unowned self] button in
             guard let mapping = self.store.config.resolve(button, frontmost: self.pressFrontmost[button])?.mapping else {
                 return .init(gestures: [])
             }
@@ -144,8 +169,6 @@ public final class RemoteEngine {
         }
     }
 
-    public func clearLog() { log.removeAll() }
-
     /// 仅用于界面预览与截图
     public func appendPreviewLog(_ entries: [LogEntry], frontmost bundleID: String?) {
         log = entries
@@ -175,9 +198,15 @@ public final class RemoteEngine {
     private func handle(_ output: GestureOutput) {
         switch output {
         case .fire(let button, let gesture):
+            if handlePowerMenu(button, gesture) { return }
             guard let bound = boundAction(button, gesture) else { return }
             if isPreviewOnly(), !bound.action.runsWhileSettingsFocused {
                 append(button: button, gesture: gesture, title: bound.displayTitle, kind: .preview)
+                return
+            }
+            if case .system(.powerMenu) = bound.action {
+                openPowerMenu(from: button)
+                append(button: button, gesture: gesture, title: bound.displayTitle, kind: .action)
                 return
             }
             if gesture == .longPress, case .dictation = bound.action {
@@ -192,6 +221,7 @@ public final class RemoteEngine {
             }
 
         case .begin(let button):
+            if handlePowerMenu(button, .hold) { return }
             guard let bound = boundAction(button, .hold) else { return }
             if isPreviewOnly(), !bound.action.runsWhileSettingsFocused {
                 append(button: button, gesture: .hold, title: bound.displayTitle, kind: .preview)
@@ -203,6 +233,45 @@ public final class RemoteEngine {
         case .end(let button):
             runner.end(for: button)
         }
+    }
+
+    // MARK: 电源菜单
+
+    private func openPowerMenu(from button: RemoteButton) {
+        powerMenu?.timer.cancel()
+        let timer = clock.schedule(after: Self.powerMenuTimeout) { [weak self] in self?.closePowerMenu() }
+        powerMenu = (button, timer)
+        statusMessage = StatusMessage(symbol: "power", title: "电源", detail: "再长按 = 关机 ｜ 双击 = 重启 ｜ 其它键取消",
+                                      duration: Self.powerMenuTimeout)
+    }
+
+    /// 电源菜单等待选择时拦截下一次手势：同一个键再长按为关机、双击为重启，其它手势都算取消。
+    /// 返回 true 表示这次手势已被菜单处理，不再执行它原本的动作
+    private func handlePowerMenu(_ button: RemoteButton, _ gesture: RemoteGesture) -> Bool {
+        guard let menu = powerMenu else { return false }
+        menu.timer.cancel()
+        powerMenu = nil
+        let choice: SystemCommand? = switch (button == menu.button, gesture) {
+        case (true, .longPress): .shutDown
+        case (true, .doubleTap): .restart
+        default: nil
+        }
+        guard let choice else {
+            statusMessage = StatusMessage(symbol: "power", title: "已取消", duration: 1)
+            append(button: button, gesture: gesture, title: "电源菜单已取消", kind: .action)
+            return true
+        }
+        statusMessage = StatusMessage(symbol: choice == .restart ? "arrow.clockwise" : "power",
+                                      title: "正在\(choice.displayName)…", duration: 2)
+        append(button: button, gesture: gesture, title: choice.displayName, kind: .action)
+        runner.perform(.system(choice))
+        return true
+    }
+
+    private func closePowerMenu() {
+        guard powerMenu != nil else { return }
+        powerMenu = nil
+        statusMessage = StatusMessage(symbol: "power", title: "已取消", duration: 1)
     }
 
     private func handle(_ frame: TouchFrame) {

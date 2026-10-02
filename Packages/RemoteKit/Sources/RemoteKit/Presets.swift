@@ -108,7 +108,7 @@ public struct Preset: Identifiable, Sendable {
                detail: "通过 URL Scheme 唤起 Codex", symbol: "link",
                action: .openURL("codex://"), preferredGesture: nil),
 
-        // ChatGPT dot：没有官方接口，通过辅助功能点击 dot 页面上的通话按钮，仅官网版可用
+        // ChatGPT dot：没有官方接口，通过辅助功能点击 dot 页面上的通话按钮
         Preset(id: "dot.toggleCall", group: .dot, title: "呼叫 / 挂断 dot",
                detail: "没有通话时呼叫 dot，通话中再按一次挂断", symbol: "phone.arrow.up.right.fill",
                action: .dotCall(.toggle), preferredGesture: nil),
@@ -152,6 +152,16 @@ public struct Preset: Identifiable, Sendable {
         Preset(id: "system.scrollDown", group: .system, title: "向下滚动",
                detail: "滚动 3 行，适合绑定到转动", symbol: "chevron.down.2",
                action: .scroll(.down, lines: 3), preferredGesture: nil),
+        // 电源：锁屏与休眠可直接触发；重启与关机只通过电源菜单二次选择，避免误触
+        Preset(id: "system.lockScreen", group: .system, title: "锁屏",
+               detail: "⌃⌘Q 锁定屏幕", symbol: "lock.fill",
+               action: .system(.lockScreen), preferredGesture: nil),
+        Preset(id: "system.sleep", group: .system, title: "休眠",
+               detail: "让 Mac 进入睡眠", symbol: "moon.zzz.fill",
+               action: .system(.sleep), preferredGesture: nil),
+        Preset(id: "system.powerMenu", group: .system, title: "电源菜单",
+               detail: "屏幕提示后，再长按为关机、双击为重启，其它键取消", symbol: "power",
+               action: .system(.powerMenu), preferredGesture: .longPress),
         Preset(id: "system.spotlight", group: .system, title: "聚焦搜索",
                detail: "⌘Space 打开 Spotlight", symbol: "magnifyingglass",
                action: .keystroke(KeyCombo(keyCode: UInt16(kVK_Space), modifiers: .command)), preferredGesture: nil),

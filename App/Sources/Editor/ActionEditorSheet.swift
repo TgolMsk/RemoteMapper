@@ -9,7 +9,6 @@ enum EditorKind: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .dictation, .scroll, .launchApp, .openURL, .shell, .appleScript]
-        .filter { !Edition.unsupportedActions.contains($0.actionKind) }
 
     var title: String {
         switch self {
@@ -215,16 +214,13 @@ struct ActionEditorSheet: View {
         }
     }
 
-    /// 当前版本可用的预设（App Store 版去掉 dot 通话等不支持的动作）
-    private static let availablePresets = Preset.all.filter { !Edition.unsupportedActions.contains($0.action.kind) }
-
     private var presetGrid: some View {
         VStack(alignment: .leading, spacing: 22) {
-            ForEach(Preset.Group.allCases.filter { group in Self.availablePresets.contains { $0.group == group } }, id: \.self) { group in
+            ForEach(Preset.Group.allCases.filter { group in Preset.all.contains { $0.group == group } }, id: \.self) { group in
                 VStack(alignment: .leading, spacing: 10) {
                     Text(group.displayName).eyebrowStyle()
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        ForEach(Self.availablePresets.filter { $0.group == group }) { preset in
+                        ForEach(Preset.all.filter { $0.group == group }) { preset in
                             PresetCard(preset: preset, isSelected: presetID == preset.id, gesture: gesture)
                                 .onTapGesture(count: 2) {
                                     presetID = preset.id
@@ -337,7 +333,7 @@ struct ActionEditorSheet: View {
         case .openURL(let value): kind = .openURL; url = value
         case .shell(let value): kind = .shell; command = value
         case .appleScript(let value): kind = .appleScript; script = value
-        case .dotCall, .mouseButton, .pointerScroll, .toggleTouchMode:
+        case .dotCall, .mouseButton, .pointerScroll, .toggleTouchMode, .system:
             // 这几类动作只通过预设编辑；手写配置里的同类动作对应到同一个预设
             kind = .preset
             presetID = Preset.all.first { $0.action == current.action }?.id

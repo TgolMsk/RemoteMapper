@@ -82,7 +82,7 @@ cat > "$OUT/安装说明.txt" <<'EOF'
 首次使用按键模拟需授权「辅助功能」；语音输入需允许麦克风并下载本机识别模型。
 遥控器内置麦克风需先安装 Apple PacketLogger 到 /Applications/PacketLogger.app，
 然后在「通用 › 语音输入」点击「安装并设为系统输入」，由用户授权安装音频组件。
-适用 Apple Silicon、macOS 26+；不含 RemoteMapper Lite。
+适用 Apple Silicon、macOS 26+。
 EOF
 mkdir -p "$OUT/dmg"
 ditto "$APP" "$OUT/dmg/RemoteMapper.app"

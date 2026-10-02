@@ -44,8 +44,6 @@ public final class BatteryMonitor: NSObject {
     private static let batteryService = CBUUID(string: "180F")
     private static let batteryLevel = CBUUID(string: "2A19")
 
-    public var isLow: Bool { (level ?? 100) <= 15 }
-
     public override init() {
         super.init()
     }

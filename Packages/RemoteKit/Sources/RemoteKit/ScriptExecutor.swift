@@ -1,11 +1,9 @@
 import Foundation
-import RemoteKit
 
-/// 在子进程中执行 Shell 命令与 AppleScript，不阻塞主线程。仅官网版使用：
-/// App Store 版运行在沙盒中，执行外部命令既无法正常工作，也不符合审核要求。
-public enum ScriptExecutor {
+/// 在子进程中执行 Shell 命令与 AppleScript，不阻塞主线程。
+enum ScriptExecutor {
     /// 执行动作，失败时返回错误说明
-    public static func run(_ action: Action) async -> String? {
+    static func run(_ action: Action) async -> String? {
         switch action {
         case .shell(let command): await run("/bin/zsh", ["-lc", command], label: "Shell")
         case .appleScript(let source): await run("/usr/bin/osascript", ["-e", source], label: "AppleScript")

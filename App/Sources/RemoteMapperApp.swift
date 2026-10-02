@@ -16,7 +16,7 @@ struct RemoteMapperApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window(Edition.name, id: SettingsWindow.id) {
+        Window("RemoteMapper", id: SettingsWindow.id) {
             SettingsView()
                 .environment(model)
         }

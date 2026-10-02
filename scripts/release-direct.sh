@@ -1,5 +1,5 @@
 #!/bin/bash
-# 官网版发布：Developer ID 签名 → Apple 公证 → 装订票据 → 打包 DMG
+# 正式发布：Developer ID 签名 → Apple 公证 → 装订票据 → 打包 DMG
 # 前置条件：钥匙串中有「Developer ID Application」证书；已用
 #   xcrun notarytool store-credentials RemoteMapper --apple-id <Apple ID> --team-id VVB976RN4W
 # 保存公证凭据（可用环境变量 NOTARY_PROFILE 指定其它名称）。

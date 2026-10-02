@@ -2,7 +2,7 @@ import AppKit
 import Observation
 import RemoteKit
 
-/// 独立安装的 CoreAudio 组件；App Store 版只使用已安装的标准音频输入。
+/// 独立安装的 CoreAudio 组件：遥控器麦克风作为系统音频输入 Siri Remote Mic。
 @Observable
 final class MicrophoneBridge {
     private(set) var isInstalled = false
@@ -20,12 +20,11 @@ final class MicrophoneBridge {
         } catch { message = error.localizedDescription }
     }
 
-    #if !APP_STORE
     func install() async {
         guard !isBusy else { return }
         guard let script = Bundle.main.resourceURL?.appending(path: "Microphone/install.sh"),
               FileManager.default.fileExists(atPath: script.path) else {
-            message = "安装组件缺失，请重新构建官网版 RemoteMapper。"
+            message = "安装组件缺失，请重新下载安装 RemoteMapper。"
             return
         }
         isBusy = true
@@ -63,5 +62,4 @@ final class MicrophoneBridge {
     private static func appleScriptQuote(_ text: String) -> String {
         text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
-    #endif
 }

@@ -1,16 +1,16 @@
 import AppKit
 import ApplicationServices
 
-/// 执行动作。键盘类动作需要辅助功能权限；Shell 与 AppleScript 由注入的 scriptExecutor 在子进程中运行。
+/// 执行动作。键盘类动作需要辅助功能权限；Shell 与 AppleScript 在子进程中运行。
 public final class ActionRunner {
     /// 动作失败时的说明，由上层写入事件日志
     public var onError: (String) -> Void = { _ in }
 
     private var holds: [RemoteButton: HoldSession] = [:]
-    /// 当前版本不支持的动作类型（App Store 版不执行 Shell 与 AppleScript）
-    public var unsupportedKinds: Set<Action.Kind> = []
-    /// 执行 Shell 与 AppleScript，返回错误说明；为 nil 时这两类动作不可用
-    public var scriptExecutor: ((Action) async -> String?)?
+    /// 执行 Shell 与 AppleScript，返回错误说明；测试中替换为记录器
+    public var scriptExecutor: (Action) async -> String? = ScriptExecutor.run
+    /// 执行锁屏、休眠、重启、关机，返回错误说明；测试中替换为记录器
+    public var systemExecutor: (SystemCommand) async -> String? = SystemControl.run
     /// 语音输入
     public var dictation: VoiceDictation?
     /// 由「按住」开始的语音输入属于哪个按钮；单击切换开始的为 nil
@@ -39,13 +39,13 @@ public final class ActionRunner {
             startDictation(submit: submit, owner: button)
             return
         case .mouseButton(let mouse):
-            guard !unsupportedKinds.contains(action.kind), requireAccessibility(), let pointer else { return }
+            guard requireAccessibility(), let pointer else { return }
             if let previous = mouseHolds.removeValue(forKey: button) { pointer.release(previous) }
             mouseHolds[button] = mouse
             pointer.press(mouse)
             return
         case .pointerScroll:
-            guard !unsupportedKinds.contains(action.kind), let pointer else { return }
+            guard let pointer else { return }
             scrollOwner = button
             pointer.isScrolling = true
             return
@@ -87,10 +87,6 @@ public final class ActionRunner {
     }
 
     private func execute(_ action: Action) async {
-        if unsupportedKinds.contains(action.kind) {
-            onError("此版本不支持「\(action.kind.displayName)」动作")
-            return
-        }
         switch action {
         case .keystroke(let combo), .holdKey(let combo):
             guard requireAccessibility() else { return }
@@ -137,11 +133,6 @@ public final class ActionRunner {
             }
 
         case .shell, .appleScript:
-            // 执行外部命令的代码在 RemoteKitScripts 中，仅官网版注入
-            guard let scriptExecutor else {
-                onError("此版本不支持「\(action.kind.displayName)」动作")
-                return
-            }
             if let message = await scriptExecutor(action) { onError(message) }
 
         case .dotCall(let operation):
@@ -158,6 +149,12 @@ public final class ActionRunner {
 
         case .toggleTouchMode:
             onToggleTouchMode()
+
+        case .system(let command):
+            // 电源菜单要等下一次按键选择，由 RemoteEngine 处理
+            guard command != .powerMenu else { return }
+            if command == .lockScreen, !requireAccessibility() { return }
+            if let message = await systemExecutor(command) { onError(message) }
 
         case .sequence(let actions):
             for step in actions { await execute(step) }

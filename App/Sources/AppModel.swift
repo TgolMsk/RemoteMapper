@@ -93,14 +93,12 @@ final class AppModel {
 
     @ObservationIgnored private var permissionTimer: Timer?
     @ObservationIgnored private var hud: DictationHUDController?
-    @ObservationIgnored private var modeToast: PointerModeToast?
+    @ObservationIgnored private var statusToast: StatusToast?
 
     init(store: ConfigStore = ConfigStore(), device: RemoteDevice = RemoteDevice(),
-         touch: (any TouchSource)? = Edition.makeTouchSource(), startsEngine: Bool = true) {
+         touch: (any TouchSource)? = TouchSurface(), startsEngine: Bool = true) {
         self.store = store
         engine = RemoteEngine(store: store, device: device, touch: touch)
-        engine.runner.unsupportedKinds = Edition.unsupportedActions
-        engine.runner.scriptExecutor = Edition.scriptExecutor
         selectedProfileID = store.config.globalProfile.id
         store.onChange = { [weak self] _ in self?.engine.configDidChange() }
         engine.isPreviewOnly = { [weak self] in self?.isSettingsKey ?? false }
@@ -126,7 +124,7 @@ final class AppModel {
             engine.start()
             watchPermissions()
             hud = DictationHUDController(model: self)
-            if Edition.supportsTouch { modeToast = PointerModeToast(model: self) }
+            statusToast = StatusToast(model: self)
             Task { [engine] in
                 // 绑定了语音输入而模型未下载时提前在后台下载，避免第一次使用时等待
                 await engine.dictation.refreshModelState()
@@ -150,7 +148,7 @@ final class AppModel {
 
     /// 当前实际生效的配置：鼠标模式优先，其次是前台 App 的专属配置
     var activeProfile: Profile {
-        if Edition.supportsTouch, config.isPointerModeActive, let pointer = config.pointerProfile { return pointer }
+        if config.isPointerModeActive, let pointer = config.pointerProfile { return pointer }
         return config.appProfile(for: engine.frontmostBundleID) ?? config.globalProfile
     }
 
@@ -240,8 +238,7 @@ final class AppModel {
     }
 
     func requestAccessibility() {
-        // 沙盒中无法弹出系统授权框，直接打开系统设置让用户手动添加
-        let options = ["AXTrustedCheckOptionPrompt": !Edition.isAppStore] as CFDictionary
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         if !AXIsProcessTrustedWithOptions(options) {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
@@ -271,13 +268,14 @@ extension AppModel {
         let store = ConfigStore(fileURL: URL(fileURLWithPath: "/dev/null"), persists: false, initial: .default)
         let device = RemoteDevice()
         device.simulate(connected: true, pressed: pressed, productName: "C08KJ2532330")
-        let model = AppModel(store: store, device: device, touch: Edition.makePreviewTouchSource(contacts: touches),
-                             startsEngine: false)
+        let touch = TouchSurface()
+        touch.simulate(contacts: touches)
+        let model = AppModel(store: store, device: device, touch: touch, startsEngine: false)
         model.hasAccessibility = true
         model.engine.battery.simulate(level: 82)
         let now = Date()
-        let touchEntry = LogEntry(date: now, button: nil, gesture: nil, touch: .swipeRight, title: "下一个标签页", kind: .action)
-        model.engine.appendPreviewLog((Edition.supportsTouch ? [touchEntry] : []) + [
+        model.engine.appendPreviewLog([
+            LogEntry(date: now, button: nil, gesture: nil, touch: .swipeRight, title: "下一个标签页", kind: .action),
             LogEntry(date: now.addingTimeInterval(-2), button: .siri, gesture: .hold, title: "按住说话", kind: .action),
             LogEntry(date: now.addingTimeInterval(-4), button: .playPause, gesture: .tap, title: "切换权限模式", kind: .action),
             LogEntry(date: now.addingTimeInterval(-9), button: .tv, gesture: .longPress, title: "切换到 Codex", kind: .action),

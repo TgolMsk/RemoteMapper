@@ -34,7 +34,6 @@ struct GeneralPane: View {
 
                 VoiceSettingsGroup()
 
-                if Edition.supportsTouch {
                 SettingsGroup("触控") {
                     SettingRow(title: "启用触控", detail: "关闭后触控板既不触发手势，也不移动光标。", symbol: "hand.draw") {
                         Toggle("启用触控", isOn: $model.config.touch.isEnabled).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
@@ -84,10 +83,9 @@ struct GeneralPane: View {
                                      format: { String(format: "%.0f°", $0) }, step: 5)
                     }
                 }
-                }
 
                 SettingsGroup("启动") {
-                    SettingRow(title: "登录时自动启动", detail: "\(Edition.name) 只常驻在菜单栏，不占用程序坞。",
+                    SettingRow(title: "登录时自动启动", detail: "RemoteMapper 只常驻在菜单栏，不占用程序坞。",
                                symbol: "sunrise", showsDivider: false) {
                         Toggle("登录时自动启动", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                             .toggleStyle(.switch).labelsHidden().tint(Theme.accent)
@@ -255,11 +253,7 @@ struct VoiceSettingsGroup: View {
                             Button("设为系统输入") { model.microphoneBridge.useAsSystemInput() }
                         }
                     } else {
-                        #if !APP_STORE
                         Button("安装并设为系统输入") { Task { await model.microphoneBridge.install() } }
-                        #else
-                        Text("需安装官网版音频组件").font(.system(size: 12)).foregroundStyle(.secondary)
-                        #endif
                     }
                 }
             } else {

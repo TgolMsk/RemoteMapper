@@ -29,6 +29,8 @@ public indirect enum Action: Hashable, Sendable {
     case pointerScroll
     /// 在触控手势与触控鼠标之间切换
     case toggleTouchMode
+    /// 锁屏、休眠、重启、关机，或弹出电源菜单（再选择重启或关机）
+    case system(SystemCommand)
     /// 依次执行多个动作
     case sequence([Action])
     /// 在组合动作中等待
@@ -49,6 +51,7 @@ public indirect enum Action: Hashable, Sendable {
         case .mouseButton: .mouseButton
         case .pointerScroll: .pointerScroll
         case .toggleTouchMode: .toggleTouchMode
+        case .system: .system
         case .sequence: .sequence
         case .delay: .delay
         }
@@ -56,7 +59,7 @@ public indirect enum Action: Hashable, Sendable {
 
     public enum Kind: String, CaseIterable, Sendable, Codable {
         case keystroke, holdKey, text, scroll, dictation, openURL, launchApp, shell, appleScript, dotCall
-        case mouseButton, pointerScroll, toggleTouchMode, sequence, delay
+        case mouseButton, pointerScroll, toggleTouchMode, system, sequence, delay
 
         public var displayName: String {
             switch self {
@@ -73,6 +76,7 @@ public indirect enum Action: Hashable, Sendable {
             case .mouseButton: "鼠标按键"
             case .pointerScroll: "按住滚动"
             case .toggleTouchMode: "切换触控鼠标"
+            case .system: "电源与锁屏"
             case .sequence: "组合动作"
             case .delay: "等待"
             }
@@ -93,6 +97,7 @@ public indirect enum Action: Hashable, Sendable {
             case .mouseButton: "cursorarrow.click"
             case .pointerScroll: "arrow.up.and.down.and.arrow.left.and.right"
             case .toggleTouchMode: "cursorarrow.motionlines"
+            case .system: "power"
             case .sequence: "list.number"
             case .delay: "hourglass"
             }
@@ -127,6 +132,7 @@ extension Action: Codable {
         case .mouseButton: self = .mouseButton(try c.decodeIfPresent(MouseButton.self, forKey: .button) ?? .left)
         case .pointerScroll: self = .pointerScroll
         case .toggleTouchMode: self = .toggleTouchMode
+        case .system: self = .system(try c.decode(SystemCommand.self, forKey: .command))
         case .sequence: self = .sequence(try c.decode([Action].self, forKey: .actions))
         case .delay: self = .delay(milliseconds: try c.decode(Int.self, forKey: .ms))
         }
@@ -152,8 +158,26 @@ extension Action: Codable {
         case .dotCall(let operation): try c.encode(operation, forKey: .operation)
         case .mouseButton(let button): try c.encode(button, forKey: .button)
         case .pointerScroll, .toggleTouchMode: break
+        case .system(let command): try c.encode(command, forKey: .command)
         case .sequence(let actions): try c.encode(actions, forKey: .actions)
         case .delay(let ms): try c.encode(ms, forKey: .ms)
+        }
+    }
+}
+
+/// 系统电源相关的命令
+public enum SystemCommand: String, CaseIterable, Codable, Sendable {
+    case lockScreen, sleep, restart, shutDown
+    /// 弹出提示，几秒内再长按为关机、双击为重启，其它键取消
+    case powerMenu
+
+    public var displayName: String {
+        switch self {
+        case .lockScreen: "锁屏"
+        case .sleep: "休眠"
+        case .restart: "重启"
+        case .shutDown: "关机"
+        case .powerMenu: "电源菜单"
         }
     }
 }
@@ -214,6 +238,7 @@ public extension Action {
         case .mouseButton(let button): "鼠标\(button.displayName)"
         case .pointerScroll: "按住时滑动即滚动"
         case .toggleTouchMode: "手势 ⇄ 鼠标"
+        case .system(let command): command.displayName
         case .sequence(let actions): actions.filter { $0.kind != .delay }.map(\.summary).joined(separator: " → ")
         case .delay(let ms): "\(ms) ms"
         }

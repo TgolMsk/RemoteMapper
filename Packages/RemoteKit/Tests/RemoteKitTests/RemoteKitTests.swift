@@ -865,3 +865,106 @@ final class RecordingPointerOutput: PointerOutput {
         #expect(run(path, settings: TouchSettings(mode: .pointer, sideScroll: false)).scrolls.isEmpty)
     }
 }
+
+/// 记录系统命令，代替真正的锁屏、休眠、重启、关机
+final class SystemRecorder {
+    var commands: [SystemCommand] = []
+}
+
+@Suite struct PowerMenuTests {
+    /// 电源键：单击锁屏、双击休眠、长按电源菜单
+    private func makeEngine() -> (RemoteEngine, ManualClock, SystemRecorder) {
+        var config = RemoteConfig.default
+        var global = config.globalProfile
+        global.mappings[.power] = ButtonMapping(tap: Preset.find("system.lockScreen")!.bound,
+                                                doubleTap: Preset.find("system.sleep")!.bound,
+                                                longPress: Preset.find("system.powerMenu")!.bound)
+        config.globalProfile = global
+        let url = FileManager.default.temporaryDirectory.appending(path: "power-\(UUID().uuidString).json")
+        let clock = ManualClock()
+        let engine = RemoteEngine(store: ConfigStore(fileURL: url, persists: false, initial: config),
+                                  pointerOutput: RecordingPointerOutput(), clock: clock)
+        let recorder = SystemRecorder()
+        engine.runner.systemExecutor = { command in
+            recorder.commands.append(command)
+            return nil
+        }
+        return (engine, clock, recorder)
+    }
+
+    private func longPress(_ engine: RemoteEngine, _ clock: ManualClock, _ button: RemoteButton = .power) {
+        engine.device.onButton?(button, true)
+        clock.advance(0.5)
+        engine.device.onButton?(button, false)
+    }
+
+    private func doubleTap(_ engine: RemoteEngine, _ clock: ManualClock) {
+        engine.device.onButton?(.power, true)
+        engine.device.onButton?(.power, false)
+        clock.advance(0.1)
+        engine.device.onButton?(.power, true)
+        engine.device.onButton?(.power, false)
+    }
+
+    /// 动作在后台任务里执行，等它跑完
+    private func settle() async { try? await Task.sleep(for: .milliseconds(50)) }
+
+    @Test func longPressTwiceShutsDown() async {
+        let (engine, clock, recorder) = makeEngine()
+        longPress(engine, clock)
+        #expect(engine.statusMessage?.title == "电源")
+        await settle()
+        #expect(recorder.commands.isEmpty)
+        longPress(engine, clock)
+        await settle()
+        #expect(recorder.commands == [.shutDown])
+        #expect(engine.statusMessage?.title == "正在关机…")
+    }
+
+    @Test func longPressThenDoubleTapRestarts() async {
+        let (engine, clock, recorder) = makeEngine()
+        longPress(engine, clock)
+        doubleTap(engine, clock)
+        await settle()
+        #expect(recorder.commands == [.restart])
+    }
+
+    @Test func otherKeyCancelsWithoutRunningIt() async {
+        let (engine, clock, recorder) = makeEngine()
+        longPress(engine, clock)
+        engine.device.onButton?(.back, true)
+        engine.device.onButton?(.back, false)
+        await settle()
+        #expect(recorder.commands.isEmpty)
+        #expect(engine.statusMessage?.title == "已取消")
+        // 取消后再长按只是重新弹出菜单，不会关机
+        longPress(engine, clock)
+        await settle()
+        #expect(recorder.commands.isEmpty && engine.statusMessage?.title == "电源")
+    }
+
+    @Test func menuTimesOut() async {
+        let (engine, clock, recorder) = makeEngine()
+        longPress(engine, clock)
+        clock.advance(RemoteEngine.powerMenuTimeout + 0.1)
+        #expect(engine.statusMessage?.title == "已取消")
+        longPress(engine, clock)
+        await settle()
+        #expect(recorder.commands.isEmpty)
+    }
+
+    @Test func doubleTapSleeps() async {
+        let (engine, clock, recorder) = makeEngine()
+        doubleTap(engine, clock)
+        await settle()
+        #expect(recorder.commands == [.sleep])
+    }
+
+    @Test func systemActionIsReadable() throws {
+        let json = String(data: try JSONEncoder().encode(Action.system(.powerMenu)), encoding: .utf8)!
+        #expect(json.contains("\"type\":\"system\"") && json.contains("\"command\":\"powerMenu\""))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(#"{"type":"system","command":"sleep"}"#.utf8)) == .system(.sleep))
+        // 重启与关机只通过电源菜单触发，不提供可直接绑定的预设
+        #expect(!Preset.all.contains { $0.action == .system(.restart) || $0.action == .system(.shutDown) })
+    }
+}
