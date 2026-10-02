@@ -22,6 +22,11 @@ enum SnapshotRenderer {
             render(VoiceSettingsGroup().environment(appModel).padding(24)
                 .background(Color(nsColor: .windowBackgroundColor)), size: CGSize(width: 790, height: 640),
                    appearance: appearance, to: directory.appending(path: "voice-settings-\(suffix).png"))
+            for saved in [false, true] {
+                render(UnlockSettingsGroup().environment(AppModel.preview(pressed: [], unlockPassword: saved)).padding(24)
+                    .background(Color(nsColor: .windowBackgroundColor)), size: CGSize(width: 790, height: 150),
+                       appearance: appearance, to: directory.appending(path: "unlock-\(saved ? "saved" : "empty")-\(suffix).png"))
+            }
             appModel.selectedProfileID = appModel.config.profiles.first { !$0.isGlobal }!.id
             appModel.selectedButton = .playPause
             render(SettingsView().environment(appModel), size: size, appearance: appearance,
@@ -56,9 +61,10 @@ enum SnapshotRenderer {
                 model.engine.dictation.simulate(phase: phase, transcript: text, level: level)
                 // 让波形有历史数据可画
                 for step in 0..<16 { model.engine.dictation.simulate(phase: phase, transcript: text, level: level * Float(0.3 + 0.7 * abs(sin(Double(step) * 0.9)))) }
-                render(DictationHUDView().environment(model).frame(width: 620, height: 132, alignment: .bottom)
+                let hudSize = DictationHUDController.size
+                render(DictationHUDView().environment(model).frame(width: hudSize.width, height: hudSize.height, alignment: .bottom)
                     .background(LinearGradient(colors: [Color(white: 0.55), Color(white: 0.35)], startPoint: .top, endPoint: .bottom)),
-                       size: CGSize(width: 620, height: 132), appearance: appearance,
+                       size: hudSize, appearance: appearance,
                        to: directory.appending(path: "hud-\(name)-\(suffix).png"))
             }
 

@@ -84,6 +84,8 @@ struct GeneralPane: View {
                     }
                 }
 
+                UnlockSettingsGroup()
+
                 SettingsGroup("启动") {
                     SettingRow(title: "登录时自动启动", detail: "RemoteMapper 只常驻在菜单栏，不占用程序坞。",
                                symbol: "sunrise", showsDivider: false) {
@@ -219,6 +221,43 @@ struct TimingDiagram: View {
 }
 
 /// 语音输入设置：麦克风、识别语言、语音模型、浮窗
+/// 「解锁屏幕」用的登录密码：保存到钥匙串，界面上只显示是否已设置
+struct UnlockSettingsGroup: View {
+    @Environment(AppModel.self) private var model
+    @State private var draft = ""
+    @State private var error: String?
+
+    var body: some View {
+        SettingsGroup("锁屏解锁") {
+            SettingRow(title: model.hasUnlockPassword ? "登录密码已保存" : "登录密码",
+                       detail: error ?? (model.hasUnlockPassword
+                           ? "保存在钥匙串中。锁屏时按下绑定了「解锁屏幕」的键即可解锁；拿到遥控器的人也能解锁这台 Mac。"
+                           : "保存到钥匙串后，在按键映射中给某个键绑定「解锁屏幕」预设。未锁屏时按下不会输入任何内容。"),
+                       symbol: model.hasUnlockPassword ? "lock.open.fill" : "lock", showsDivider: false) {
+                HStack(spacing: 8) {
+                    SecureField(model.hasUnlockPassword ? "新密码" : "Mac 登录密码", text: $draft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 160)
+                        .onSubmit(save)
+                    Button(model.hasUnlockPassword ? "更新" : "保存", action: save)
+                        .disabled(draft.isEmpty)
+                    if model.hasUnlockPassword {
+                        Button("清除", role: .destructive) {
+                            error = model.setUnlockPassword(nil)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func save() {
+        guard !draft.isEmpty else { return }
+        error = model.setUnlockPassword(draft)
+        draft = ""
+    }
+}
+
 struct VoiceSettingsGroup: View {
     @Environment(AppModel.self) private var model
     @State private var devices: [AudioInputDevice] = []

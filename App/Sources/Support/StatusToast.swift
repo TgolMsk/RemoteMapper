@@ -123,7 +123,7 @@ final class StatusToast {
     }
 }
 
-/// 提示内容，样式与语音输入浮窗一致
+/// 提示内容，背景与语音输入浮窗一致
 struct StatusToastView: View {
     let content: StatusToast.Content
 
@@ -145,12 +145,7 @@ struct StatusToastView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background {
-            Capsule(style: .continuous)
-                .fill(Color(white: 0.08).opacity(0.92))
-                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.10), lineWidth: 0.6))
-                .shadow(color: .black.opacity(0.45), radius: 24, y: 10)
-        }
+        .hudBackground()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .padding(.bottom, 20)
     }

@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import os
 
 /// 拦截被映射的遥控器媒体键（音量、静音、播放）原本的系统行为。
 ///
@@ -17,6 +18,8 @@ public final class MediaKeyInterceptor {
     private var lastRemoteActivity: [RemoteButton: TimeInterval] = [:]
     private var deferred: [(event: CGEvent, button: RemoteButton, time: TimeInterval)] = []
 
+    private static let log = Logger(subsystem: "com.ws.RemoteMapper", category: "mediakey")
+    private static let mediaButtons: Set<RemoteButton> = [.volumeUp, .volumeDown, .mute, .playPause]
     private static let correlationWindow: TimeInterval = 0.35
     private static let deferWindow: TimeInterval = 0.06
     /// NX_SYSDEFINED 事件类型与媒体键子类型
@@ -58,8 +61,11 @@ public final class MediaKeyInterceptor {
     public func noteRemoteActivity(_ button: RemoteButton) {
         let now = ProcessInfo.processInfo.systemUptime
         lastRemoteActivity[button] = now
+        guard Self.mediaButtons.contains(button) else { return }
         // 先到的系统事件正等待判定，遥控器报告随后到达 → 确认来自遥控器，直接丢弃
+        let matched = deferred.filter { $0.button == button }
         deferred.removeAll { $0.button == button }
+        Self.log.info("遥控器报告：\(button.displayName, privacy: .public)\(matched.isEmpty ? "" : "，丢弃先到的 \(matched.count) 个系统事件", privacy: .public)")
     }
 
     fileprivate func handle(type: CGEventType, event: CGEvent) -> CGEvent? {
@@ -69,15 +75,25 @@ public final class MediaKeyInterceptor {
         }
         guard type == Self.systemDefinedType,
               event.getIntegerValueField(.eventSourceUserData) != KeyboardSynth.eventMarker,
-              let nsEvent = NSEvent(cgEvent: event), nsEvent.subtype.rawValue == Self.mediaKeySubtype,
-              let button = Self.button(forMediaKey: (nsEvent.data1 & 0xFFFF_0000) >> 16),
-              shouldIntercept(button) else {
+              let nsEvent = NSEvent(cgEvent: event), nsEvent.subtype.rawValue == Self.mediaKeySubtype else {
+            return event
+        }
+        let key = (nsEvent.data1 & 0xFFFF_0000) >> 16
+        let state = (nsEvent.data1 & 0xFF00) >> 8 == 0x0A ? "按下" : "松开"
+        guard let button = Self.button(forMediaKey: key) else {
+            Self.log.info("系统媒体键 \(key) \(state, privacy: .public)：遥控器上没有对应按钮，放行")
+            return event
+        }
+        guard shouldIntercept(button) else {
+            Self.log.info("系统媒体键 \(button.displayName, privacy: .public) \(state, privacy: .public)：未映射或未接管，放行")
             return event
         }
         let now = ProcessInfo.processInfo.systemUptime
         if let last = lastRemoteActivity[button], now - last < Self.correlationWindow {
+            Self.log.info("系统媒体键 \(button.displayName, privacy: .public) \(state, privacy: .public)：\(Int((now - last) * 1000)) ms 前遥控器刚按过，丢弃")
             return nil
         }
+        Self.log.info("系统媒体键 \(button.displayName, privacy: .public) \(state, privacy: .public)：暂扣，等待遥控器报告")
         guard let copy = event.copy() else { return event }
         deferred.append((copy, button, now))
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.deferWindow) { [weak self] in
@@ -92,6 +108,7 @@ public final class MediaKeyInterceptor {
         let expired = deferred.filter { now - $0.time >= age - 0.005 }
         deferred.removeAll { now - $0.time >= age - 0.005 }
         for item in expired {
+            Self.log.info("系统媒体键 \(item.button.displayName, privacy: .public)：未等到遥控器报告，判定来自键盘，重新投递")
             item.event.setIntegerValueField(.eventSourceUserData, value: KeyboardSynth.eventMarker)
             item.event.post(tap: .cghidEventTap)
         }

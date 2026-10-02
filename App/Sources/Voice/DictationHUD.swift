@@ -7,7 +7,7 @@ import SwiftUI
 final class DictationHUDController {
     private let model: AppModel
     private var panel: NSPanel?
-    private static let size = CGSize(width: 620, height: 132)
+    static let size = CGSize(width: 480, height: 96)
 
     init(model: AppModel) {
         self.model = model
@@ -87,15 +87,15 @@ struct DictationHUDView: View {
 
     var body: some View {
         let dictation = model.engine.dictation
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             MicOrb(level: dictation.level, phase: dictation.phase)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(headline(dictation.phase))
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.6)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
                     .foregroundStyle(headlineColor(dictation.phase))
                 Text(bodyText(dictation))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(dictation.transcript.isEmpty ? .white.opacity(0.45) : .white)
                     .lineLimit(2)
                     .truncationMode(.head)
@@ -110,20 +110,14 @@ struct DictationHUDView: View {
                     ProgressView().controlSize(.small).tint(.white)
                 }
             }
-            .frame(width: 62, height: 28)
+            .frame(width: 46, height: 20)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 20)
-        .padding(.vertical, 12)
-        .frame(width: 540)
-        .background {
-            Capsule(style: .continuous)
-                .fill(Color(white: 0.08).opacity(0.92))
-                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.10), lineWidth: 0.6))
-                .shadow(color: .black.opacity(0.45), radius: 24, y: 10)
-        }
+        .padding(.leading, 8)
+        .padding(.trailing, 16)
+        .padding(.vertical, 6)
+        .frame(width: 400)
+        .hudBackground()
         .padding(.bottom, 20)
-        .environment(\.colorScheme, .dark)
         .onChange(of: dictation.level) {
             levels.removeFirst()
             levels.append(dictation.level)
@@ -165,18 +159,18 @@ struct MicOrb: View {
         ZStack {
             Circle()
                 .fill(tint.opacity(0.35))
-                .frame(width: 44, height: 44)
-                .scaleEffect(1 + energy * 0.55)
+                .frame(width: 32, height: 32)
+                .scaleEffect(1 + energy * 0.5)
                 .opacity(0.25 + Double(energy) * 0.75)
             Circle()
                 .fill(LinearGradient(colors: [tint, tint.opacity(0.75)], startPoint: .top, endPoint: .bottom))
-                .frame(width: 40, height: 40)
-                .shadow(color: tint.opacity(0.6), radius: 4 + energy * 10)
+                .frame(width: 30, height: 30)
+                .shadow(color: tint.opacity(0.6), radius: 3 + energy * 8)
             Image(systemName: isFailed ? "mic.slash.fill" : "mic.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .frame(width: 56, height: 56)
+        .frame(width: 44, height: 44)
         .animation(.easeOut(duration: 0.12), value: level)
     }
 }
@@ -190,7 +184,7 @@ struct Waveform: View {
             ForEach(Array(levels.enumerated()), id: \.offset) { index, value in
                 Capsule()
                     .fill(.white.opacity(0.35 + Double(index) / Double(levels.count) * 0.55))
-                    .frame(width: 2, height: max(3, CGFloat(value) * 28))
+                    .frame(width: 2, height: max(3, CGFloat(value) * 20))
             }
         }
         .animation(.easeOut(duration: 0.1), value: levels)

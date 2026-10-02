@@ -152,10 +152,13 @@ public struct Preset: Identifiable, Sendable {
         Preset(id: "system.scrollDown", group: .system, title: "向下滚动",
                detail: "滚动 3 行，适合绑定到转动", symbol: "chevron.down.2",
                action: .scroll(.down, lines: 3), preferredGesture: nil),
-        // 电源：锁屏与休眠可直接触发；重启与关机只通过电源菜单二次选择，避免误触
+        // 电源：锁屏、解锁与休眠可直接触发；重启与关机只通过电源菜单二次选择，避免误触
         Preset(id: "system.lockScreen", group: .system, title: "锁屏",
                detail: "⌃⌘Q 锁定屏幕", symbol: "lock.fill",
                action: .system(.lockScreen), preferredGesture: nil),
+        Preset(id: "system.unlock", group: .system, title: "解锁屏幕",
+               detail: "锁屏时输入钥匙串里的登录密码并回车，未锁屏时不做任何事", symbol: "lock.open.fill",
+               action: .system(.unlock), preferredGesture: nil),
         Preset(id: "system.sleep", group: .system, title: "休眠",
                detail: "让 Mac 进入睡眠", symbol: "moon.zzz.fill",
                action: .system(.sleep), preferredGesture: nil),

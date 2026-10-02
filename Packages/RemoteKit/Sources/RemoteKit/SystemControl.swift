@@ -1,7 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// 锁屏、休眠、重启、关机。
+/// 锁屏、解锁、休眠、重启、关机。
 enum SystemControl {
     /// 执行命令，失败时返回错误说明
     static func run(_ command: SystemCommand) async -> String? {
@@ -10,6 +10,7 @@ enum SystemControl {
             // 系统的「锁定屏幕」快捷键
             KeyboardSynth.tap(KeyCombo(keyCode: UInt16(kVK_ANSI_Q), modifiers: [.control, .command]))
             return nil
+        case .unlock: return await LockScreen.unlock()
         case .sleep: return send(kAESleep, name: "休眠")
         case .restart: return send(kAERestart, name: "重启")
         case .shutDown: return send(kAEShutDown, name: "关机")

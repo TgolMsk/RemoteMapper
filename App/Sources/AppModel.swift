@@ -90,6 +90,8 @@ final class AppModel {
     private(set) var hasAccessibility = ActionRunner.hasAccessibility
     private(set) var microphoneAccess = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
+    /// 钥匙串里是否已保存「解锁屏幕」用的密码
+    private(set) var hasUnlockPassword = UnlockPassword.isSet
 
     @ObservationIgnored private var permissionTimer: Timer?
     @ObservationIgnored private var hud: DictationHUDController?
@@ -101,7 +103,8 @@ final class AppModel {
         engine = RemoteEngine(store: store, device: device, touch: touch)
         selectedProfileID = store.config.globalProfile.id
         store.onChange = { [weak self] _ in self?.engine.configDidChange() }
-        engine.isPreviewOnly = { [weak self] in self?.isSettingsKey ?? false }
+        // 锁屏时前台 App 不变，设置窗口仍可能是主窗口，但这时按键显然不是在设置界面里试按
+        engine.isPreviewOnly = { [weak self] in (self?.isSettingsKey ?? false) && !LockScreen.isLocked }
         engine.onButtonDown = { [weak self] button in
             // 设置窗口在前台时，按遥控器上的键即可直接选中它；鼠标模式下按键多半是在点击，不跳转
             guard let self, self.isSettingsKey, !self.config.isPointerModeActive else { return }
@@ -125,6 +128,7 @@ final class AppModel {
             watchPermissions()
             hud = DictationHUDController(model: self)
             statusToast = StatusToast(model: self)
+            UnlockPassword.prepareAccess()
             Task { [engine] in
                 // 绑定了语音输入而模型未下载时提前在后台下载，避免第一次使用时等待
                 await engine.dictation.refreshModelState()
@@ -237,6 +241,21 @@ final class AppModel {
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
+    /// 保存或清除解锁密码（传 nil 清除），失败时返回错误说明
+    func setUnlockPassword(_ password: String?) -> String? {
+        defer { hasUnlockPassword = UnlockPassword.isSet }
+        guard let password else {
+            UnlockPassword.delete()
+            return nil
+        }
+        do {
+            try UnlockPassword.save(password)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func requestAccessibility() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         if !AXIsProcessTrustedWithOptions(options) {
@@ -264,7 +283,7 @@ final class AppModel {
 // MARK: - 预览数据（截图与 SwiftUI 预览）
 
 extension AppModel {
-    static func preview(pressed: Set<RemoteButton> = [.siri], touches: [TouchContact] = []) -> AppModel {
+    static func preview(pressed: Set<RemoteButton> = [.siri], touches: [TouchContact] = [], unlockPassword: Bool = true) -> AppModel {
         let store = ConfigStore(fileURL: URL(fileURLWithPath: "/dev/null"), persists: false, initial: .default)
         let device = RemoteDevice()
         device.simulate(connected: true, pressed: pressed, productName: "C08KJ2532330")
@@ -272,6 +291,7 @@ extension AppModel {
         touch.simulate(contacts: touches)
         let model = AppModel(store: store, device: device, touch: touch, startsEngine: false)
         model.hasAccessibility = true
+        model.hasUnlockPassword = unlockPassword
         model.engine.battery.simulate(level: 82)
         let now = Date()
         model.engine.appendPreviewLog([

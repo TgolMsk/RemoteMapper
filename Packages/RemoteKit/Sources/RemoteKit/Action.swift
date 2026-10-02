@@ -168,12 +168,15 @@ extension Action: Codable {
 /// 系统电源相关的命令
 public enum SystemCommand: String, CaseIterable, Codable, Sendable {
     case lockScreen, sleep, restart, shutDown
+    /// 锁屏时输入钥匙串里的登录密码解锁，未锁屏时不做任何事
+    case unlock
     /// 弹出提示，几秒内再长按为关机、双击为重启，其它键取消
     case powerMenu
 
     public var displayName: String {
         switch self {
         case .lockScreen: "锁屏"
+        case .unlock: "解锁屏幕"
         case .sleep: "休眠"
         case .restart: "重启"
         case .shutDown: "关机"

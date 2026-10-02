@@ -81,8 +81,26 @@ struct CardBackground: ViewModifier {
     }
 }
 
+/// 屏幕底部浮窗（语音输入、状态提示）的胶囊背景：深色半透明，能透出后面的内容，
+/// 叠一层黑色保证白字在浅色背景上也看得清
+struct HUDBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background {
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(Capsule(style: .continuous).fill(.black.opacity(0.38)))
+                    .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 0.6))
+                    .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+            }
+            .environment(\.colorScheme, .dark)
+    }
+}
+
 extension View {
     func card(padding: CGFloat = 0) -> some View { modifier(CardBackground(padding: padding)) }
+
+    func hudBackground() -> some View { modifier(HUDBackground()) }
 
     /// 小号大写标题，用于分组名
     func eyebrowStyle() -> some View {

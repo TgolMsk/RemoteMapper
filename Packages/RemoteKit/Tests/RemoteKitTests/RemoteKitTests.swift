@@ -968,3 +968,25 @@ final class SystemRecorder {
         #expect(!Preset.all.contains { $0.action == .system(.restart) || $0.action == .system(.shutDown) })
     }
 }
+
+@Suite struct UnlockTests {
+    @Test func unlockActionIsReadable() throws {
+        let json = String(data: try JSONEncoder().encode(Action.system(.unlock)), encoding: .utf8)!
+        #expect(json.contains("\"command\":\"unlock\""))
+        #expect(Preset.find("system.unlock")?.action == .system(.unlock))
+    }
+
+    /// 未锁屏时解锁什么也不做，不会读取钥匙串，更不会把密码打进当前 App
+    @Test func unlockDoesNothingWhenNotLocked() async {
+        guard !LockScreen.isLocked else { return }
+        #expect(await LockScreen.unlock() == nil)
+    }
+
+    /// 锁屏输入按真实键位逐字发送：常用字符都能在 ASCII 键盘布局里找到键位，大写字母需要 ⇧
+    @Test func asciiKeyMapCoversPasswordCharacters() {
+        let keys = KeyboardSynth.asciiKeyMap()
+        for character in "abcxyzABCXYZ0123456789" { #expect(keys[character] != nil, "缺少 \(character)") }
+        #expect(keys["a"]?.shift == false && keys["A"]?.shift == true)
+        #expect(keys["a"]?.code == keys["A"]?.code)
+    }
+}
