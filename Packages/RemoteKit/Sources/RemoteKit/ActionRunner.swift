@@ -9,7 +9,7 @@ public final class ActionRunner {
     private var holds: [RemoteButton: HoldSession] = [:]
     /// 执行 Shell 与 AppleScript，返回错误说明；测试中替换为记录器
     public var scriptExecutor: (Action) async -> String? = ScriptExecutor.run
-    /// 执行锁屏、解锁、休眠、重启、关机，返回错误说明；测试中替换为记录器
+    /// 执行锁屏、关闭显示器、解锁、休眠、重启、关机，返回错误说明；测试中替换为记录器
     public var systemExecutor: (SystemCommand) async -> String? = SystemControl.run
     /// 语音输入
     public var dictation: VoiceDictation?
@@ -153,8 +153,12 @@ public final class ActionRunner {
         case .system(let command):
             // 电源菜单要等下一次按键选择，由 RemoteEngine 处理
             guard command != .powerMenu else { return }
-            if command == .lockScreen || command == .unlock, !requireAccessibility() { return }
+            if [.lockScreen, .displaySleep, .unlock].contains(command), !requireAccessibility() { return }
             if let message = await systemExecutor(command) { onError(message) }
+
+        case .playSlides(let path, let unlock):
+            guard requireAccessibility() else { return }
+            if let message = await SlideShow.play(path: path, unlock: unlock) { onError(message) }
 
         case .sequence(let actions):
             for step in actions { await execute(step) }

@@ -11,7 +11,8 @@ enum ScriptExecutor {
         }
     }
 
-    private static func run(_ executable: String, _ arguments: [String], label: String) async -> String? {
+    /// 运行可执行文件，非零退出码时返回带错误输出的说明
+    static func run(_ executable: String, _ arguments: [String], label: String) async -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments

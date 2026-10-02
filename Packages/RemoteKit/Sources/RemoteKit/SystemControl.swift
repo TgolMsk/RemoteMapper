@@ -1,21 +1,32 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// 锁屏、解锁、休眠、重启、关机。
+/// 锁屏、关闭显示器、解锁、休眠、重启、关机。
 enum SystemControl {
     /// 执行命令，失败时返回错误说明
     static func run(_ command: SystemCommand) async -> String? {
         switch command {
         case .lockScreen:
-            // 系统的「锁定屏幕」快捷键
-            KeyboardSynth.tap(KeyCombo(keyCode: UInt16(kVK_ANSI_Q), modifiers: [.control, .command]))
+            lockScreen()
             return nil
+        case .displaySleep:
+            // 先锁屏再关显示器：不依赖「关闭显示器后需要密码」的系统设置；Mac 本身不休眠
+            if !LockScreen.isLocked {
+                lockScreen()
+                try? await Task.sleep(for: .milliseconds(800))
+            }
+            return await ScriptExecutor.run("/usr/bin/pmset", ["displaysleepnow"], label: "关闭显示器")
         case .unlock: return await LockScreen.unlock()
         case .sleep: return send(kAESleep, name: "休眠")
         case .restart: return send(kAERestart, name: "重启")
         case .shutDown: return send(kAEShutDown, name: "关机")
         case .powerMenu: return nil
         }
+    }
+
+    /// 系统的「锁定屏幕」快捷键
+    private static func lockScreen() {
+        KeyboardSynth.tap(KeyCombo(keyCode: UInt16(kVK_ANSI_Q), modifiers: [.control, .command]))
     }
 
     /// 给登录窗口发送系统事件，与苹果菜单里的「睡眠」「重新启动」「关机」相同：

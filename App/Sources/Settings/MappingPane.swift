@@ -371,6 +371,8 @@ struct GestureCard: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             model.setAction(nil, for: gesture, button: button, in: profileID)
                         }
+                    } onDropFile: { url in
+                        model.bindSlides(url, to: .button(button, gesture), in: profileID)
                     }
                 }
             }
@@ -387,7 +389,8 @@ struct GestureCard: View {
     }
 }
 
-/// 一个可绑定动作的行：图标、名称、说明，右侧为动作摘要或「添加动作」
+/// 一个可绑定动作的行：图标、名称、说明，右侧为动作摘要或「添加动作」。
+/// 把演示文稿拖到行上即绑定为「放映演示文稿」
 struct BindingRow: View {
     let title: String
     let detail: String
@@ -399,8 +402,11 @@ struct BindingRow: View {
     let showsDivider: Bool
     let onEdit: () -> Void
     let onClear: () -> Void
+    /// 拖入文件，接受时返回 true
+    let onDropFile: (URL) -> Bool
 
     @State private var isHovered = false
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -419,10 +425,21 @@ struct BindingRow: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 66)
-            .background(isFiring ? Theme.accentFill : (isHovered && !isBlocked ? Theme.rowHover : .clear))
+            .background(isFiring || isDropTargeted ? Theme.accentFill : (isHovered && !isBlocked ? Theme.rowHover : .clear))
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                        .padding(4)
+                }
+            }
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .onTapGesture { if !isBlocked { onEdit() } }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard !isBlocked, let url = urls.first else { return false }
+                return onDropFile(url)
+            } isTargeted: { isDropTargeted = $0 && !isBlocked }
             .opacity(isBlocked ? 0.45 : 1)
 
             if showsDivider {
@@ -433,7 +450,11 @@ struct BindingRow: View {
     }
 
     @ViewBuilder private var trailing: some View {
-        if isBlocked {
+        if isDropTargeted {
+            Label("松开即绑定：放映这份文稿", systemImage: "play.rectangle.on.rectangle")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.accent)
+        } else if isBlocked {
             Text("已由「按住」接管").font(.system(size: 12)).foregroundStyle(.secondary)
         } else if let bound {
             HStack(spacing: 10) {
@@ -690,6 +711,8 @@ struct TouchCard: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                         model.setAction(nil, for: .touch(gesture), in: profileID)
                     }
+                } onDropFile: { url in
+                    model.bindSlides(url, to: .touch(gesture), in: profileID)
                 }
             }
         }

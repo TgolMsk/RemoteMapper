@@ -43,12 +43,15 @@ enum SnapshotRenderer {
                    to: directory.appending(path: "settings-touch-\(suffix).png"))
 
             let editors: [(String, EditorTarget)] = [("preset", .button(.siri, .hold)), ("keystroke", .button(.playPause, .tap)),
-                                                     ("scroll", .touch(.rotateClockwise))]
+                                                     ("scroll", .touch(.rotateClockwise)), ("slides", .button(.playPause, .longPress))]
             for (name, target) in editors {
                 let model = AppModel.preview()
                 let terminal = model.config.profiles.first { !$0.isGlobal }!.id
                 let profileID = name == "scroll" ? model.config.globalProfile.id : terminal
                 if name == "scroll" { model.setAction(BoundAction(.scroll(.down, lines: 5)), for: target, in: profileID) }
+                if name == "slides" {
+                    model.setAction(BoundAction(.playSlides(path: "~/Documents/产品发布会.pptx", unlock: true)), for: target, in: profileID)
+                }
                 let context = EditorContext(profileID: profileID, target: target)
                 render(ActionEditorSheet(context: context).environment(model), size: CGSize(width: 760, height: 600),
                        appearance: appearance, to: directory.appending(path: "editor-\(name)-\(suffix).png"))

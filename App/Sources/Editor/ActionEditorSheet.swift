@@ -1,14 +1,16 @@
 import AppKit
 import RemoteKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 编辑器左侧的分类
 enum EditorKind: String, CaseIterable, Identifiable {
-    case preset, keystroke, holdKey, text, dictation, scroll, launchApp, openURL, shell, appleScript, sequence
+    case preset, keystroke, holdKey, text, dictation, scroll, launchApp, openURL, playSlides, shell, appleScript, sequence
 
     var id: String { rawValue }
 
-    static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .dictation, .scroll, .launchApp, .openURL, .shell, .appleScript]
+    static let custom: [EditorKind] = [.keystroke, .holdKey, .text, .dictation, .scroll, .launchApp, .openURL, .playSlides,
+                                       .shell, .appleScript]
 
     var title: String {
         switch self {
@@ -35,6 +37,7 @@ enum EditorKind: String, CaseIterable, Identifiable {
         case .scroll: .scroll
         case .launchApp: .launchApp
         case .openURL: .openURL
+        case .playSlides: .playSlides
         case .shell: .shell
         case .appleScript: .appleScript
         }
@@ -55,11 +58,14 @@ struct ActionEditorSheet: View {
     @State private var scrollLines = 3
     @State private var url = ""
     @State private var bundleID = ""
+    @State private var slidesPath = ""
+    @State private var unlockFirst = true
     @State private var command = ""
     @State private var script = ""
     @State private var sequence: [Action] = []
     @State private var title = ""
     @State private var existing: BoundAction?
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,7 +75,8 @@ struct ActionEditorSheet: View {
                 sidebar
                 Rectangle().fill(Theme.hairline).frame(width: 1)
                 ScrollView {
-                    detail
+                    // 显式左对齐：否则 ScrollView 会把多个子视图放进居中的 VStack，复选框跑到中间
+                    VStack(alignment: .leading) { detail }
                         .padding(24)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -80,6 +87,22 @@ struct ActionEditorSheet: View {
         }
         .frame(width: 760, height: 600)
         .background(Theme.paneBackground)
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                    .padding(6)
+                    .allowsHitTesting(false)
+            }
+        }
+        // 在编辑器任意位置拖入演示文稿：切换到「放映演示文稿」并填好路径
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first, SlideShow.isPresentation(url) else { return false }
+            kind = .playSlides
+            slidesPath = SlideShow.storedPath(for: url)
+            unlockFirst = model.hasUnlockPassword
+            return true
+        } isTargeted: { isDropTargeted = $0 }
         .onAppear(perform: load)
     }
 
@@ -192,6 +215,13 @@ struct ActionEditorSheet: View {
                 }
             }
             .padding(.top, 8)
+        case .playSlides:
+            DetailIntro(title: "放映演示文稿", text: "按一下即解锁、打开文稿并从头全屏放映，支持 WPS、PowerPoint 与 Keynote（Keynote 从所选幻灯片开始）。不先解锁时，会等你自己解锁后再放映。也可以直接把文稿拖到映射页的某个手势上。")
+            SlidesPicker(path: $slidesPath)
+            Toggle("锁屏时先解锁", isOn: $unlockFirst).toggleStyle(.checkbox).padding(.top, 12)
+            if unlockFirst, !model.hasUnlockPassword {
+                GestureHint(text: "还没有保存解锁密码：在「通用 › 锁屏解锁」中设置。")
+            }
         case .shell:
             DetailIntro(title: "Shell 命令", text: "在登录 shell（zsh -lc）中后台执行，PATH 与终端一致。非零退出码会显示在实时事件里。")
             CodeField(text: $command, placeholder: "例如 open -a iTerm ~/Project", monospaced: true)
@@ -295,6 +325,7 @@ struct ActionEditorSheet: View {
         case .openURL:
             let trimmed = url.trimmingCharacters(in: .whitespaces)
             return URL(string: trimmed)?.scheme == nil ? nil : bound(.openURL(trimmed))
+        case .playSlides: return slidesPath.isEmpty ? nil : bound(.playSlides(path: slidesPath, unlock: unlockFirst))
         case .shell: return command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bound(.shell(command))
         case .appleScript: return script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bound(.appleScript(script))
         case .sequence: return sequence.isEmpty ? nil : bound(.sequence(sequence))
@@ -331,6 +362,7 @@ struct ActionEditorSheet: View {
         case .dictation(let shouldSubmit): kind = .dictation; submit = shouldSubmit
         case .launchApp(let value): kind = .launchApp; bundleID = value
         case .openURL(let value): kind = .openURL; url = value
+        case .playSlides(let path, let unlock): kind = .playSlides; slidesPath = path; unlockFirst = unlock
         case .shell(let value): kind = .shell; command = value
         case .appleScript(let value): kind = .appleScript; script = value
         case .dotCall, .mouseButton, .pointerScroll, .toggleTouchMode, .system:
@@ -496,12 +528,63 @@ struct ScrollEditor: View {
     }
 }
 
-/// 选择 App：推荐的开发工具 + 正在运行的 App + 从「应用程序」选择
+/// 选择演示文稿，显示默认用哪个 App 打开、能否自动放映
+struct SlidesPicker: View {
+    @Binding var path: String
+
+    private static let types: [UTType] = [.presentation] + SlideShow.fileExtensions.compactMap { UTType(filenameExtension: $0) }
+
+    var body: some View {
+        let app = path.isEmpty ? nil : SlideShow.defaultApp(forPath: path)
+        HStack(spacing: 14) {
+            if path.isEmpty {
+                Image(systemName: "doc.richtext").font(.system(size: 28)).foregroundStyle(.tertiary).frame(width: 44, height: 44)
+            } else {
+                Image(nsImage: NSWorkspace.shared.icon(for: UTType(filenameExtension: (path as NSString).pathExtension) ?? .presentation))
+                    .resizable().frame(width: 44, height: 44)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(path.isEmpty ? "尚未选择" : (path as NSString).lastPathComponent)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(path.isEmpty ? "把 .pptx、.ppt、.key 或 .dps 文件拖到这里，或点「选择…」" : path)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                if let app {
+                    Label(app.supportsAutoPlay ? "用 \(app.name) 打开并放映" : "默认用 \(app.name) 打开，不支持自动放映",
+                          systemImage: app.supportsAutoPlay ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(app.supportsAutoPlay ? Theme.live : Theme.warning)
+                        .padding(.top, 2)
+                }
+            }
+            Spacer()
+            Button("选择…", action: choose)
+        }
+        .card(padding: 14)
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = Self.types
+        panel.directoryURL = path.isEmpty
+            ? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            : URL(fileURLWithPath: (path as NSString).expandingTildeInPath).deletingLastPathComponent()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        path = SlideShow.storedPath(for: url)
+    }
+}
+
+/// 选择 App：推荐的开发工具与演示软件 + 正在运行的 App + 从「应用程序」选择
 struct AppPicker: View {
     @Binding var bundleID: String
 
     private var suggestions: [String] {
-        [KnownApp.claudeDesktop, KnownApp.codex, KnownApp.iTerm, KnownApp.terminal, "com.apple.dt.Xcode"]
+        [KnownApp.claudeDesktop, KnownApp.codex, KnownApp.iTerm, KnownApp.terminal, "com.apple.dt.Xcode",
+         KnownApp.wps, KnownApp.powerPoint, KnownApp.keynote]
             .filter { AppInfo.url(for: $0) != nil }
     }
 

@@ -172,6 +172,17 @@ final class AppModel {
         setMapping(mapping, for: button, in: profileID)
     }
 
+    /// 把拖进来的演示文稿绑定为「放映演示文稿」；已保存解锁密码时锁屏会先解锁。不是演示文稿返回 false
+    @discardableResult
+    func bindSlides(_ url: URL, to target: EditorTarget, in profileID: UUID) -> Bool {
+        guard SlideShow.isPresentation(url) else { return false }
+        let action = Action.playSlides(path: SlideShow.storedPath(for: url), unlock: hasUnlockPassword)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            setAction(BoundAction(action), for: target, in: profileID)
+        }
+        return true
+    }
+
     /// 某个位置在指定配置中自己的动作（不含沿用全局的部分）
     func ownAction(_ target: EditorTarget, in profileID: UUID) -> BoundAction? {
         switch target {

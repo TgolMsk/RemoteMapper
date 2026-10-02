@@ -15,7 +15,7 @@ struct GeneralPane: View {
                         Toggle("启用映射", isOn: $model.config.isEnabled).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
                     }
                     SettingRow(title: "接管系统媒体键",
-                               detail: "音量、静音、播放键被映射时，拦截它们原本的系统功能。需要辅助功能权限。",
+                               detail: "独占遥控器按键：映射了的键不再触发系统功能（电源键不再弹出关机对话框），未映射的音量、静音、播放键仍按系统默认。关闭后遥控器恢复原生行为。",
                                symbol: "speaker.wave.2", showsDivider: false) {
                         Toggle("接管系统媒体键", isOn: $model.config.interceptSystemKeys).toggleStyle(.switch).labelsHidden().tint(Theme.accent)
                     }

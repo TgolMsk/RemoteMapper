@@ -50,6 +50,8 @@ public enum KeyboardSynth {
             }
             try? await Task.sleep(for: .milliseconds(12))
         }
+        // 最后一个字符带 ⇧ 时同样会残留，滚动会变成横向
+        releaseModifiers()
     }
 
     /// 字符 → 键位（是否需要 ⇧）的反查表，取自当前的 ASCII 键盘布局（中文输入法下即 ABC）
@@ -78,6 +80,18 @@ public enum KeyboardSynth {
         return map
     }
 
+    /// 发送系统媒体键（NX_SYSDEFINED），与键盘上的音量、播放键相同，会显示系统音量提示。
+    /// 独占遥控器时，未映射的媒体键由这里代为发送，保持「未映射即系统默认」
+    public static func postMediaKey(_ key: Int, down: Bool) {
+        let data1 = (key << 16) | ((down ? 0xA : 0xB) << 8)
+        guard let event = NSEvent.otherEvent(with: .systemDefined, location: .zero,
+                                             modifierFlags: NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00),
+                                             timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
+                                             data1: data1, data2: -1)?.cgEvent else { return }
+        event.setIntegerValueField(.eventSourceUserData, value: eventMarker)
+        event.post(tap: .cghidEventTap)
+    }
+
     /// 按行滚动：向下即显示下方内容
     public static func scroll(_ direction: ScrollDirection, lines: Int) {
         let amount = Int32(max(1, lines))
@@ -103,6 +117,18 @@ public enum KeyboardSynth {
             event.flags = combo.modifiers.cgFlags
         }
         if autorepeat { event.setIntegerValueField(.keyboardEventAutorepeat, value: 1) }
+        event.setIntegerValueField(.eventSourceUserData, value: eventMarker)
+        event.post(tap: .cghidEventTap)
+        if !down, !combo.modifiers.isEmpty, KeyNames.modifierFlag(for: combo.keyCode) == nil { releaseModifiers() }
+    }
+
+    /// 系统按最近一次合成事件上的修饰键标志记录「哪些修饰键按着」：组合键松开后若不补发修饰键松开，
+    /// ⌘ 等会一直残留，之后合成的鼠标与滚动事件都会带上它（例如在 WPS 里滚动变成 ⌘+滚动的缩放），
+    /// 直到用户在实体键盘上碰一下修饰键。实体键盘松开修饰键时也会发送这样的 flagsChanged
+    static func releaseModifiers() {
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: false) else { return }
+        event.type = .flagsChanged
+        event.flags = []
         event.setIntegerValueField(.eventSourceUserData, value: eventMarker)
         event.post(tap: .cghidEventTap)
     }

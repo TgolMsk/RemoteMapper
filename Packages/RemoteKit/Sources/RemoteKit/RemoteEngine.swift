@@ -50,6 +50,8 @@ public final class RemoteEngine {
     public let store: ConfigStore
     @ObservationIgnored public let runner = ActionRunner()
     @ObservationIgnored public let interceptor = MediaKeyInterceptor()
+    /// 独占遥控器时代发未映射的媒体键，测试中替换为记录器
+    @ObservationIgnored public var postMediaKey: @MainActor (Int, Bool) -> Void = KeyboardSynth.postMediaKey
     /// 触控鼠标：鼠标模式下由触控面驱动光标，鼠标按键动作也通过它执行
     @ObservationIgnored public let pointer: TouchPointer
 
@@ -138,6 +140,7 @@ public final class RemoteEngine {
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             MainActor.assumeIsolated { self?.frontmostBundleID = app?.bundleIdentifier }
         }
+        device.isExclusive = wantsExclusive
         device.start()
         if device.isConnected {
             touch?.start()
@@ -152,8 +155,12 @@ public final class RemoteEngine {
         interceptorRunning = interceptor.start()
     }
 
+    /// 启用映射且接管系统媒体键时独占遥控器按键，停用后交还系统，遥控器恢复原生行为
+    private var wantsExclusive: Bool { store.config.isEnabled && store.config.interceptSystemKeys }
+
     /// 配置变化后调用：同步手势时长，停用时结束进行中的按住动作
     public func configDidChange() {
+        device.isExclusive = wantsExclusive
         gestures.timing = store.config.gestureTiming
         touchRecognizer.settings = store.config.touch
         if pointer.settings.mode != store.config.touch.mode {
@@ -188,8 +195,10 @@ public final class RemoteEngine {
             if isDown { append(button: button, gesture: nil, title: "映射已停用", kind: .passthrough) }
             return
         }
-        if isDown, store.config.resolve(button, frontmost: frontmostBundleID) == nil {
-            append(button: button, gesture: nil, title: "未映射 · 系统默认", kind: .passthrough)
+        if store.config.resolve(button, frontmost: pressFrontmost[button] ?? frontmostBundleID) == nil {
+            if isDown { append(button: button, gesture: nil, title: "未映射 · 系统默认", kind: .passthrough) }
+            // 独占时系统收不到遥控器按键，未映射的媒体键由本 App 代为发送
+            if device.isExclusive, let key = MediaKeyInterceptor.mediaKey(for: button) { postMediaKey(key, isDown) }
         }
         gestures.handle(button, isDown: isDown)
         if !isDown { runner.buttonReleased(button) }

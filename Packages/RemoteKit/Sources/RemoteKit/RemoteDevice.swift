@@ -36,6 +36,16 @@ public final class RemoteDevice {
     @ObservationIgnored private var manager: IOHIDManager?
     @ObservationIgnored private var sinks: [ReportSink] = []
 
+    /// 独占遥控器的按键接口：系统不再收到任何按键，只由本 App 处理。
+    /// 电源键在 HID 驱动里直接通知电源管理弹出关机对话框，事件拦截挡不住，只能这样屏蔽
+    public var isExclusive = false {
+        didSet {
+            guard isExclusive != oldValue, manager != nil else { return }
+            stop()
+            start()
+        }
+    }
+
     public init() {}
 
     public func start() {
@@ -53,7 +63,13 @@ public final class RemoteDevice {
         IOHIDManagerRegisterDeviceRemovalCallback(manager, deviceRemoved, context)
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
 
-        let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        var result = IOHIDManagerOpen(manager, IOOptionBits(isExclusive ? kIOHIDOptionsTypeSeizeDevice : kIOHIDOptionsTypeNone))
+        if isExclusive, result != kIOReturnSuccess {
+            Self.log.error("独占按键接口失败 0x\(String(UInt32(bitPattern: result), radix: 16), privacy: .public)，改为共享读取")
+            result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        } else if isExclusive {
+            Self.log.info("已独占遥控器按键接口")
+        }
         if result == kIOReturnSuccess {
             status = sinks.isEmpty ? .searching : .connected
         } else if result == kIOReturnNotPermitted {
@@ -71,6 +87,7 @@ public final class RemoteDevice {
         IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = nil
+        if isExclusive { Self.log.info("已释放遥控器按键接口") }
         releaseAll()
         status = .idle
     }

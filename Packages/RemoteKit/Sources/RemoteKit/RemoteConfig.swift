@@ -66,7 +66,7 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
     public var voice: VoiceSettings
     public var profiles: [Profile]
 
-    public static let currentVersion = 3
+    public static let currentVersion = 4
 
     public init(version: Int = RemoteConfig.currentVersion, isEnabled: Bool = true, interceptSystemKeys: Bool = true,
                 longPressThreshold: Double = 0.45, doubleTapInterval: Double = 0.28, touch: TouchSettings = TouchSettings(),
@@ -139,7 +139,8 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
         return global.touchMappings[gesture].map { ($0, global) }
     }
 
-    /// 旧版本配置升级（只填补空缺，不覆盖已有设置）：v1 → v2 补上默认的触控手势映射，v2 → v3 补上鼠标模式配置
+    /// 旧版本配置升级（只填补空缺，不覆盖已有设置）：v1 → v2 补上默认的触控手势映射，v2 → v3 补上鼠标模式配置，
+    /// v3 → v4 补上演示配置（已有 WPS 或 PowerPoint 的专属配置时不补）
     @discardableResult
     public mutating func migrate() -> Bool {
         guard version < Self.currentVersion else { return false }
@@ -155,6 +156,13 @@ public struct RemoteConfig: Codable, Hashable, Sendable {
         }
         if version < 3, pointerProfile == nil {
             profiles.append(RemoteConfig.defaultPointerProfile)
+        }
+        if version < 4 {
+            let presentation = RemoteConfig.defaultPresentationProfile
+            if !profiles.contains(where: { !Set($0.bundleIDs).isDisjoint(with: presentation.bundleIDs) }) {
+                // 放在鼠标模式配置之前，与新装时的顺序一致
+                profiles.insert(presentation, at: profiles.firstIndex(where: \.isPointerMode) ?? profiles.endIndex)
+            }
         }
         version = Self.currentVersion
         return true
@@ -233,7 +241,23 @@ public extension RemoteConfig {
             .swipeRight: preset("system.nextTab"),
         ])
 
-        return RemoteConfig(profiles: [global, terminal, defaultPointerProfile])
+        return RemoteConfig(profiles: [global, terminal, defaultPresentationProfile, defaultPointerProfile])
+    }
+
+    /// 演示配置（WPS、PowerPoint 放映快捷键相同）：播放键单击从当前页放映、长按从头放映，
+    /// 按下触控板翻到下一页，返回键结束放映，触控板左右滑动翻页。
+    /// 方向键沿用全局的映射，放映时本来就是翻页。WPS 的文字、表格与演示是同一个 App，
+    /// 所以只映射在文稿里也无害的键：黑屏、白屏这类字母键不放进来
+    static var defaultPresentationProfile: Profile {
+        func preset(_ id: String) -> BoundAction { Preset.find(id)!.bound }
+        return Profile(name: "演示", bundleIDs: [KnownApp.wps, KnownApp.powerPoint], mappings: [
+            .playPause: ButtonMapping(tap: preset("presentation.fromCurrent"), longPress: preset("presentation.fromBeginning")),
+            .select: ButtonMapping(tap: preset("presentation.next")),
+            .back: ButtonMapping(tap: preset("presentation.end")),
+        ], touchMappings: [
+            .swipeLeft: preset("presentation.previous"),
+            .swipeRight: preset("presentation.next"),
+        ])
     }
 
     /// 鼠标模式的默认映射：侧面 Siri 键单击为确定（左键单击）、双击在光标与滚轮之间切换；

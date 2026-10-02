@@ -1,4 +1,5 @@
 import ApplicationServices
+import Carbon.HIToolbox
 import Foundation
 import Testing
 @testable import RemoteKit
@@ -988,5 +989,145 @@ final class SystemRecorder {
         for character in "abcxyzABCXYZ0123456789" { #expect(keys[character] != nil, "缺少 \(character)") }
         #expect(keys["a"]?.shift == false && keys["A"]?.shift == true)
         #expect(keys["a"]?.code == keys["A"]?.code)
+    }
+}
+
+@Suite struct PresentationTests {
+    @Test func presetsUseDocumentedShortcuts() {
+        func combo(_ id: String) -> KeyCombo? {
+            if case .keystroke(let combo) = Preset.find(id)?.action { return combo }
+            return nil
+        }
+        #expect(combo("presentation.fromCurrent") == KeyCombo(keyCode: UInt16(kVK_Return), modifiers: .command))
+        #expect(combo("presentation.fromBeginning") == KeyCombo(keyCode: UInt16(kVK_Return), modifiers: [.command, .shift]))
+        #expect(combo("presentation.keynotePlay") == KeyCombo(keyCode: UInt16(kVK_ANSI_P), modifiers: [.command, .option]))
+        #expect(combo("presentation.end") == .escape)
+        #expect(Preset.all.filter { $0.group == .presentation }.count == 10)
+    }
+
+    /// 演示配置只在 WPS / PowerPoint 前台时生效，未映射的方向键沿用全局
+    @Test func presentationProfileResolvesPerApp() {
+        let config = RemoteConfig.default
+        #expect(config.resolve(.playPause, frontmost: KnownApp.wps)?.mapping.tap?.presetID == "presentation.fromCurrent")
+        #expect(config.resolve(.playPause, frontmost: KnownApp.powerPoint)?.mapping.longPress?.presetID == "presentation.fromBeginning")
+        #expect(config.resolve(.select, frontmost: KnownApp.wps)?.mapping.tap?.presetID == "presentation.next")
+        #expect(config.resolve(.right, frontmost: KnownApp.wps)?.profile.isGlobal == true)
+        #expect(config.resolve(.swipeRight, frontmost: KnownApp.wps)?.action.presetID == "presentation.next")
+        #expect(config.resolve(.playPause, frontmost: KnownApp.terminal)?.mapping.tap?.presetID == "claudeCode.cycleMode")
+    }
+
+    @Test func migrationAddsPresentationProfileOnce() throws {
+        let json = #"{"version": 3, "profiles": [{"name": "全局", "mappings": {}}, {"name": "鼠标模式", "pointerMode": true, "mappings": {}}]}"#
+        var config = try JSONDecoder().decode(RemoteConfig.self, from: Data(json.utf8))
+        let migrated = config.migrate()
+        #expect(migrated)
+        #expect(config.profiles.map(\.name) == ["全局", "演示", "鼠标模式"])
+        let migratedAgain = config.migrate()
+        #expect(!migratedAgain)
+        #expect(config.profiles.filter { $0.name == "演示" }.count == 1)
+    }
+
+    /// 用户已经给 WPS 建过专属配置时不再补
+    @Test func migrationKeepsExistingWPSProfile() throws {
+        let json = #"{"version": 3, "profiles": [{"name": "全局", "mappings": {}}, {"name": "我的 WPS", "bundleIDs": ["com.kingsoft.wpsoffice.mac"], "mappings": {}}]}"#
+        var config = try JSONDecoder().decode(RemoteConfig.self, from: Data(json.utf8))
+        config.migrate()
+        #expect(!config.profiles.contains { $0.name == "演示" })
+    }
+}
+
+@Suite struct SlideShowTests {
+    @Test func playSlidesActionIsReadable() throws {
+        let action = Action.playSlides(path: "~/Documents/发布会.pptx", unlock: true)
+        let json = String(data: try JSONEncoder().encode(action), encoding: .utf8)!
+        #expect(json.contains("\"type\":\"playSlides\"") && json.contains("\"unlock\":true"))
+        #expect(try JSONDecoder().decode(Action.self, from: Data(json.utf8)) == action)
+        // 手写配置可以省略 unlock，默认不解锁
+        let handWritten = #"{"type": "playSlides", "path": "/tmp/a.key"}"#
+        #expect(try JSONDecoder().decode(Action.self, from: Data(handWritten.utf8)) == .playSlides(path: "/tmp/a.key", unlock: false))
+        #expect(action.summary == "发布会.pptx · 先解锁")
+    }
+
+    /// 拖入时只接受演示文稿，路径以 ~ 开头保存
+    @Test func recognizesDroppedPresentations() {
+        for name in ["a.pptx", "b.PPT", "c.key", "d.dps", "e.ppsx"] {
+            #expect(SlideShow.isPresentation(URL(fileURLWithPath: "/tmp/\(name)")), "\(name)")
+        }
+        #expect(!SlideShow.isPresentation(URL(fileURLWithPath: "/tmp/a.docx")))
+        #expect(!SlideShow.isPresentation(URL(string: "https://example.com/a.pptx")!))
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        #expect(SlideShow.storedPath(for: home.appending(path: "Documents/a.pptx")) == "~/Documents/a.pptx")
+    }
+
+    /// WPS 与 PowerPoint 用 ⇧⌘↩ 从头放映，Keynote 用 ⌥⌘P，其它 App 不自动放映
+    @Test func startShortcutPerApp() {
+        let fromBeginning = KeyCombo(keyCode: UInt16(kVK_Return), modifiers: [.command, .shift])
+        #expect(SlideShow.startPreset(forApp: KnownApp.wps)?.action.keyCombo == fromBeginning)
+        #expect(SlideShow.startPreset(forApp: KnownApp.powerPoint)?.action.keyCombo == fromBeginning)
+        #expect(SlideShow.startPreset(forApp: KnownApp.keynote)?.action.keyCombo
+                == KeyCombo(keyCode: UInt16(kVK_ANSI_P), modifiers: [.command, .option]))
+        #expect(SlideShow.startPreset(forApp: "com.apple.Preview") == nil)
+    }
+}
+
+@Suite struct PowerKeyTests {
+    /// 遥控器电源键会产生系统电源键事件（NX_POWER_KEY = 6），不拦截时系统弹出关机对话框
+    @Test func interceptorMapsPowerKey() {
+        #expect(MediaKeyInterceptor.button(forMediaKey: 6) == .power)
+        #expect(MediaKeyInterceptor.button(forMediaKey: 16) == .playPause)
+        #expect(MediaKeyInterceptor.button(forMediaKey: 4) == nil)
+    }
+
+    @Test func displaySleepIsReadable() throws {
+        #expect(try JSONDecoder().decode(Action.self, from: Data(#"{"type":"system","command":"displaySleep"}"#.utf8)) == .system(.displaySleep))
+        #expect(Preset.find("system.displaySleep")?.action == .system(.displaySleep))
+    }
+}
+
+@Suite struct ExclusiveRemoteTests {
+    private func makeEngine(_ config: RemoteConfig) -> (RemoteEngine, () -> [String]) {
+        let url = FileManager.default.temporaryDirectory.appending(path: "exclusive-\(UUID().uuidString).json")
+        let engine = RemoteEngine(store: ConfigStore(fileURL: url, persists: false, initial: config),
+                                  pointerOutput: RecordingPointerOutput(), clock: ManualClock())
+        var posted: [String] = []
+        engine.postMediaKey = { key, down in posted.append("\(key)\(down ? "↓" : "↑")") }
+        return (engine, { posted })
+    }
+
+    /// 独占时未映射的媒体键由本 App 代发，映射了的键不代发
+    @Test func forwardsUnmappedMediaKeysWhileExclusive() {
+        var config = RemoteConfig.default
+        config.globalProfile.mappings[.mute] = nil
+        config.globalProfile.mappings[.volumeUp] = ButtonMapping(tap: Preset.find("system.scrollUp")!.bound)
+        let (engine, posted) = makeEngine(config)
+        engine.device.isExclusive = true
+        for button in [RemoteButton.mute, .volumeUp] {
+            engine.device.onButton?(button, true)
+            engine.device.onButton?(button, false)
+        }
+        #expect(posted() == ["7↓", "7↑"])
+    }
+
+    /// 不独占时系统自己处理遥控器按键，不能重复发送
+    @Test func doesNotForwardWhenShared() {
+        let (engine, posted) = makeEngine(RemoteConfig.default)
+        engine.device.onButton?(.mute, true)
+        engine.device.onButton?(.mute, false)
+        #expect(posted().isEmpty)
+    }
+
+    /// 启用映射且接管系统媒体键时才独占
+    @Test func exclusiveFollowsSettings() {
+        let (engine, _) = makeEngine(RemoteConfig.default)
+        engine.store.config.interceptSystemKeys = true
+        engine.configDidChange()
+        #expect(engine.device.isExclusive)
+        engine.store.config.isEnabled = false
+        engine.configDidChange()
+        #expect(!engine.device.isExclusive)
+        engine.store.config.isEnabled = true
+        engine.store.config.interceptSystemKeys = false
+        engine.configDidChange()
+        #expect(!engine.device.isExclusive)
     }
 }

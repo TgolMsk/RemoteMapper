@@ -31,6 +31,8 @@ public indirect enum Action: Hashable, Sendable {
     case toggleTouchMode
     /// 锁屏、休眠、重启、关机，或弹出电源菜单（再选择重启或关机）
     case system(SystemCommand)
+    /// 打开演示文稿并从头全屏放映；unlock 为 true 时锁屏会先用钥匙串里的密码解锁
+    case playSlides(path: String, unlock: Bool)
     /// 依次执行多个动作
     case sequence([Action])
     /// 在组合动作中等待
@@ -52,6 +54,7 @@ public indirect enum Action: Hashable, Sendable {
         case .pointerScroll: .pointerScroll
         case .toggleTouchMode: .toggleTouchMode
         case .system: .system
+        case .playSlides: .playSlides
         case .sequence: .sequence
         case .delay: .delay
         }
@@ -59,7 +62,7 @@ public indirect enum Action: Hashable, Sendable {
 
     public enum Kind: String, CaseIterable, Sendable, Codable {
         case keystroke, holdKey, text, scroll, dictation, openURL, launchApp, shell, appleScript, dotCall
-        case mouseButton, pointerScroll, toggleTouchMode, system, sequence, delay
+        case mouseButton, pointerScroll, toggleTouchMode, system, playSlides, sequence, delay
 
         public var displayName: String {
             switch self {
@@ -77,6 +80,7 @@ public indirect enum Action: Hashable, Sendable {
             case .pointerScroll: "按住滚动"
             case .toggleTouchMode: "切换触控鼠标"
             case .system: "电源与锁屏"
+            case .playSlides: "放映演示文稿"
             case .sequence: "组合动作"
             case .delay: "等待"
             }
@@ -98,6 +102,7 @@ public indirect enum Action: Hashable, Sendable {
             case .pointerScroll: "arrow.up.and.down.and.arrow.left.and.right"
             case .toggleTouchMode: "cursorarrow.motionlines"
             case .system: "power"
+            case .playSlides: "play.rectangle.on.rectangle"
             case .sequence: "list.number"
             case .delay: "hourglass"
             }
@@ -108,6 +113,7 @@ public indirect enum Action: Hashable, Sendable {
 extension Action: Codable {
     private enum CodingKeys: String, CodingKey {
         case type, key, keyCode, modifiers, text, submit, direction, lines, url, bundleID, command, source, operation, button, actions, ms
+        case path, unlock
     }
 
     public init(from decoder: Decoder) throws {
@@ -133,6 +139,9 @@ extension Action: Codable {
         case .pointerScroll: self = .pointerScroll
         case .toggleTouchMode: self = .toggleTouchMode
         case .system: self = .system(try c.decode(SystemCommand.self, forKey: .command))
+        case .playSlides:
+            self = .playSlides(path: try c.decode(String.self, forKey: .path),
+                               unlock: try c.decodeIfPresent(Bool.self, forKey: .unlock) ?? false)
         case .sequence: self = .sequence(try c.decode([Action].self, forKey: .actions))
         case .delay: self = .delay(milliseconds: try c.decode(Int.self, forKey: .ms))
         }
@@ -159,6 +168,9 @@ extension Action: Codable {
         case .mouseButton(let button): try c.encode(button, forKey: .button)
         case .pointerScroll, .toggleTouchMode: break
         case .system(let command): try c.encode(command, forKey: .command)
+        case .playSlides(let path, let unlock):
+            try c.encode(path, forKey: .path)
+            if unlock { try c.encode(true, forKey: .unlock) }
         case .sequence(let actions): try c.encode(actions, forKey: .actions)
         case .delay(let ms): try c.encode(ms, forKey: .ms)
         }
@@ -168,6 +180,8 @@ extension Action: Codable {
 /// 系统电源相关的命令
 public enum SystemCommand: String, CaseIterable, Codable, Sendable {
     case lockScreen, sleep, restart, shutDown
+    /// 锁屏并关闭显示器，Mac 不休眠
+    case displaySleep
     /// 锁屏时输入钥匙串里的登录密码解锁，未锁屏时不做任何事
     case unlock
     /// 弹出提示，几秒内再长按为关机、双击为重启，其它键取消
@@ -176,6 +190,7 @@ public enum SystemCommand: String, CaseIterable, Codable, Sendable {
     public var displayName: String {
         switch self {
         case .lockScreen: "锁屏"
+        case .displaySleep: "锁屏并关闭显示器"
         case .unlock: "解锁屏幕"
         case .sleep: "休眠"
         case .restart: "重启"
@@ -242,6 +257,7 @@ public extension Action {
         case .pointerScroll: "按住时滑动即滚动"
         case .toggleTouchMode: "手势 ⇄ 鼠标"
         case .system(let command): command.displayName
+        case .playSlides(let path, let unlock): (path as NSString).lastPathComponent + (unlock ? " · 先解锁" : "")
         case .sequence(let actions): actions.filter { $0.kind != .delay }.map(\.summary).joined(separator: " → ")
         case .delay(let ms): "\(ms) ms"
         }

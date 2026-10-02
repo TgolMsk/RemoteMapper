@@ -2,7 +2,8 @@ import AppKit
 import CoreGraphics
 import os
 
-/// 拦截被映射的遥控器媒体键（音量、静音、播放）原本的系统行为。
+/// 拦截被映射的遥控器媒体键（音量、静音、播放、电源）原本的系统行为。
+/// 电源键不拦截时，系统会弹出「确定要现在将电脑关机吗？」对话框。
 ///
 /// 系统媒体键事件（NX_SYSDEFINED）不携带来源设备信息，只能按时间与遥控器的 HID 报告关联：
 /// 遥控器刚按过对应按钮 → 丢弃；否则先扣下事件，短暂等待遥控器报告，
@@ -19,7 +20,7 @@ public final class MediaKeyInterceptor {
     private var deferred: [(event: CGEvent, button: RemoteButton, time: TimeInterval)] = []
 
     private static let log = Logger(subsystem: "com.ws.RemoteMapper", category: "mediakey")
-    private static let mediaButtons: Set<RemoteButton> = [.volumeUp, .volumeDown, .mute, .playPause]
+    private static let mediaButtons: Set<RemoteButton> = [.volumeUp, .volumeDown, .mute, .playPause, .power]
     private static let correlationWindow: TimeInterval = 0.35
     private static let deferWindow: TimeInterval = 0.06
     /// NX_SYSDEFINED 事件类型与媒体键子类型
@@ -114,11 +115,23 @@ public final class MediaKeyInterceptor {
         }
     }
 
+    /// 遥控器按钮对应的系统媒体键；电源键不在其中：代发的电源键事件不会让系统做任何事
+    static func mediaKey(for button: RemoteButton) -> Int? {
+        switch button {
+        case .volumeUp: 0
+        case .volumeDown: 1
+        case .mute: 7
+        case .playPause: 16
+        default: nil
+        }
+    }
+
     /// NX_KEYTYPE_* 与遥控器按钮的对应关系
-    private static func button(forMediaKey key: Int) -> RemoteButton? {
+    static func button(forMediaKey key: Int) -> RemoteButton? {
         switch key {
         case 0: .volumeUp      // NX_KEYTYPE_SOUND_UP
         case 1: .volumeDown    // NX_KEYTYPE_SOUND_DOWN
+        case 6: .power         // NX_POWER_KEY
         case 7: .mute          // NX_KEYTYPE_MUTE
         case 16: .playPause    // NX_KEYTYPE_PLAY
         default: nil
