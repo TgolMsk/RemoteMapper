@@ -7,9 +7,9 @@ public enum MouseButton: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .left: "左键"
-        case .right: "右键"
-        case .middle: "中键"
+        case .left: L10n.text("左键")
+        case .right: L10n.text("右键")
+        case .middle: L10n.text("中键")
         }
     }
 }

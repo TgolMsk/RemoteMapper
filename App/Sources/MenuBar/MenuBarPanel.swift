@@ -17,10 +17,10 @@ struct MenuBarPanel: View {
                     Text("RemoteMapper").font(.system(size: 14, weight: .semibold)).fixedSize()
                     HStack(spacing: 5) {
                         Circle().fill(device.isConnected ? Theme.live : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
-                        Text(device.isConnected ? "遥控器已连接" : "等待遥控器连接")
+                        Text(device.isConnected ? L10n.text("遥控器已连接") : L10n.text("等待遥控器连接"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
-                            .fixedSize()
+                            .fixedSize(horizontal: false, vertical: true)
                         if device.isConnected, let level = model.engine.battery.level {
                             BatteryBadge(level: level)
                                 .padding(.leading, 6)
@@ -28,7 +28,7 @@ struct MenuBarPanel: View {
                     }
                 }
                 Spacer()
-                Toggle("启用映射", isOn: $model.config.isEnabled)
+                Toggle(L10n.text("启用映射"), isOn: $model.config.isEnabled)
                     .toggleStyle(.switch)
                     .labelsHidden()
                     .controlSize(.small)
@@ -40,9 +40,9 @@ struct MenuBarPanel: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("当前配置").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text(L10n.text("当前配置")).font(.system(size: 12)).foregroundStyle(.secondary)
                     Spacer()
-                    Text(model.config.isEnabled ? model.activeProfile.name : "已暂停")
+                    Text(model.config.isEnabled ? model.activeProfile.displayName : L10n.text("已暂停"))
                         .font(.system(size: 12, weight: .semibold))
                 }
                 if let entry = model.engine.log.first {
@@ -66,23 +66,24 @@ struct MenuBarPanel: View {
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
             VStack(spacing: 2) {
-                MenuRow(title: "打开设置…", shortcut: "⌘,") {
+                MenuRow(title: L10n.text("打开设置…"), shortcut: "⌘,") {
                     openWindow(id: SettingsWindow.id)
                     NSApp.activate()
                 }
                 .keyboardShortcut(",")
-                MenuRow(title: "退出 RemoteMapper", shortcut: "⌘Q") { NSApp.terminate(nil) }
+                MenuRow(title: L10n.text("退出 RemoteMapper"), shortcut: "⌘Q") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }
             .padding(6)
         }
-        .frame(width: 300)
+        .frame(width: 340)
     }
 
     private func relativeTime(_ date: Date, now: Date) -> String {
-        if now.timeIntervalSince(date) < 5 { return "刚刚" }
+        if now.timeIntervalSince(date) < 5 { return L10n.text("刚刚") }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
+        formatter.locale = L10n.locale
         return formatter.localizedString(for: date, relativeTo: now)
     }
 }

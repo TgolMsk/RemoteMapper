@@ -51,14 +51,17 @@ struct StageView: View {
                     .transition(.opacity)
 
                 header
+                    .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight)
                     .padding(.horizontal, 28)
                     .padding(.top, 54)
 
                 EventTicker(entries: Array(model.engine.log.prefix(3)))
+                    .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight)
                     .frame(width: proxy.size.width - 56, height: tickerHeight - 28, alignment: .topLeading)
                     .offset(x: 28, y: proxy.size.height - tickerHeight)
             }
         }
+        .environment(\.layoutDirection, .leftToRight)
         .environment(\.colorScheme, .dark)
     }
 
@@ -76,10 +79,10 @@ struct StageView: View {
                         .transition(.opacity)
                 }
                 if device.isConnected {
-                    StatusPill(text: "已连接", color: Theme.live, pulsing: true)
+                    StatusPill(text: L10n.text("已连接"), color: Theme.live, pulsing: true)
                         .foregroundStyle(.white.opacity(0.85))
                 } else {
-                    StatusPill(text: "等待连接", color: .white.opacity(0.5))
+                    StatusPill(text: L10n.text("等待连接"), color: .white.opacity(0.5))
                         .foregroundStyle(.white.opacity(0.6))
                 }
             }
@@ -94,7 +97,7 @@ struct StageView: View {
         switch device.status {
         case .failed(let message): return message
         case .connected: return "\(device.productName ?? "Siri Remote") · BLE · 004C:0315"
-        default: return "请在 系统设置 › 蓝牙 中连接遥控器"
+        default: return L10n.text("请在 系统设置 › 蓝牙 中连接遥控器")
         }
     }
 }
@@ -283,14 +286,14 @@ struct Callout: View {
         let profileID = model.selectedProfileID
         let mapped = TouchGesture.allCases.filter { model.effectiveAction(.touch($0), in: profileID) != nil }.count
         return VStack(alignment: .leading, spacing: 3) {
-            Text("触控面")
+            Text(L10n.text("触控面"))
                 .font(Theme.eyebrow(10))
-                .tracking(0.6)
+                .tracking(L10n.language.isRightToLeft ? 0 : 0.6)
                 .foregroundStyle(.white.opacity(0.5))
-            Text(mapped == 0 ? "未映射" : "\(mapped) 个手势")
+            Text(mapped == 0 ? L10n.text("未映射") : L10n.format("%@ 个手势", String(mapped)))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
-            Text("滑动 · 转动")
+            Text(L10n.text("滑动 · 转动"))
                 .font(.system(size: 10.5))
                 .foregroundStyle(.white.opacity(0.45))
         }
@@ -303,7 +306,7 @@ struct Callout: View {
         return VStack(alignment: alignment, spacing: 3) {
             Text(button.displayName)
                 .font(Theme.eyebrow(10))
-                .tracking(0.6)
+                .tracking(L10n.language.isRightToLeft ? 0 : 0.6)
                 .foregroundStyle(.white.opacity(0.5))
             if let mapping, let primary = RemoteGesture.allCases.lazy.compactMap({ g in mapping[g].map { (g, $0) } }).first {
                 Text(primary.1.displayTitle)
@@ -317,10 +320,10 @@ struct Callout: View {
                     .font(.system(size: 10.5))
                     .foregroundStyle(.white.opacity(0.45))
             } else {
-                Text("未映射")
+                Text(L10n.text("未映射"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.7))
-                Text("保持系统默认")
+                Text(L10n.text("保持系统默认"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -336,14 +339,14 @@ struct EventTicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("实时事件")
+                Text(L10n.text("实时事件"))
                     .font(Theme.eyebrow())
-                    .tracking(1.2)
+                    .tracking(L10n.language.isRightToLeft ? 0 : 1.2)
                     .foregroundStyle(.white.opacity(0.4))
                 Spacer()
             }
             if entries.isEmpty {
-                Text("按下遥控器上的任意键，它会在这里出现，并在右侧被选中。")
+                Text(L10n.text("按下遥控器上的任意键，它会在这里出现，并在右侧被选中。"))
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.42))
                     .fixedSize(horizontal: false, vertical: true)
@@ -386,7 +389,7 @@ struct EventRow: View {
                 .foregroundStyle(titleColor)
                 .lineLimit(1)
             if entry.kind == .preview {
-                Text("预览")
+                Text(L10n.text("预览"))
                     .font(.system(size: 9.5, weight: .semibold))
                     .foregroundStyle(Theme.glow)
                     .padding(.horizontal, 5)
@@ -397,8 +400,8 @@ struct EventRow: View {
     }
 
     private var source: String {
-        if let touch = entry.touch { return "触控 · \(touch.displayName)" }
-        let name = entry.button?.shortName ?? "系统"
+        if let touch = entry.touch { return L10n.format("触控 · %@", String(touch.displayName)) }
+        let name = entry.button?.shortName ?? L10n.text("系统")
         return entry.gesture.map { "\(name) · \($0.displayName)" } ?? name
     }
 

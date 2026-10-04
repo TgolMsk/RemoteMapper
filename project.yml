@@ -5,6 +5,7 @@ options:
     macOS: "26.0"
   createIntermediateGroups: true
   groupSortPosition: top
+  developmentLanguage: en
 
 packages:
   RemoteKit:
@@ -35,8 +36,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: RemoteMapper
-        CFBundleDevelopmentRegion: zh-Hans
-        CFBundleLocalizations: [zh-Hans]
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, zh-Hans, zh-Hant, ja, ko, fr, de, es, pt-BR, it, ru, ar]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true

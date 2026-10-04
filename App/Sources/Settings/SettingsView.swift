@@ -53,39 +53,49 @@ struct SettingsHeader: View {
     @Namespace private var namespace
 
     var body: some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 2) {
-                ForEach(SettingsTab.allCases) { tab in
-                    let isSelected = model.tab == tab
-                    Button {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { model.tab = tab }
-                    } label: {
-                        Text(tab.title)
-                            .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
-                            .foregroundStyle(isSelected ? .primary : .secondary)
-                            .padding(.horizontal, 14)
-                            .frame(height: 28)
-                            .background {
-                                if isSelected {
-                                    Capsule()
-                                        .fill(Theme.card)
-                                        .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
-                                        .overlay(Capsule().strokeBorder(Theme.cardBorder, lineWidth: 0.5))
-                                        .matchedGeometryEffect(id: "tab", in: namespace)
-                                }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                tabs
+                Spacer(minLength: 0)
+                MasterSwitch().fixedSize(horizontal: true, vertical: false)
             }
-            .padding(3)
-            .background(Theme.subtleFill, in: .capsule)
-
-            Spacer()
-
-            MasterSwitch()
+            VStack(alignment: .leading, spacing: 8) {
+                tabs
+                MasterSwitch()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 2) {
+            ForEach(SettingsTab.allCases) { tab in
+                let isSelected = model.tab == tab
+                Button {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { model.tab = tab }
+                } label: {
+                    Text(tab.title)
+                        .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(isSelected ? .primary : .secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(Theme.card)
+                                    .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
+                                    .overlay(Capsule().strokeBorder(Theme.cardBorder, lineWidth: 0.5))
+                                    .matchedGeometryEffect(id: "tab", in: namespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Theme.subtleFill, in: .capsule)
     }
 }
 
@@ -96,13 +106,15 @@ struct MasterSwitch: View {
         @Bindable var model = model
         HStack(spacing: 10) {
             VStack(alignment: .trailing, spacing: 1) {
-                Text(model.config.isEnabled ? "映射运行中" : "映射已暂停")
+                Text(model.config.isEnabled ? L10n.text("映射运行中") : L10n.text("映射已暂停"))
                     .font(.system(size: 12, weight: .semibold))
-                Text(model.config.isEnabled ? "当前配置：\(model.activeProfile.name)" : "遥控器保持系统默认行为")
+                    .lineLimit(1)
+                Text(model.config.isEnabled ? L10n.format("当前配置：%@", String(model.activeProfile.displayName)) : L10n.text("遥控器保持系统默认行为"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            Toggle("启用映射", isOn: $model.config.isEnabled)
+            Toggle(L10n.text("启用映射"), isOn: $model.config.isEnabled)
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .tint(Theme.accent)

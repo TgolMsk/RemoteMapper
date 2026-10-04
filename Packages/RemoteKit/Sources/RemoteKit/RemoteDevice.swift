@@ -73,9 +73,9 @@ public final class RemoteDevice {
         if result == kIOReturnSuccess {
             status = sinks.isEmpty ? .searching : .connected
         } else if result == kIOReturnNotPermitted {
-            status = .failed("没有读取输入设备的权限（输入监控）")
+            status = .failed(L10n.text("没有读取输入设备的权限（输入监控）"))
         } else {
-            status = .failed(String(format: "IOHIDManagerOpen 失败 0x%08x", result))
+            status = .failed(L10n.format("IOHIDManagerOpen 失败 0x%08x", result))
         }
         self.manager = manager
     }

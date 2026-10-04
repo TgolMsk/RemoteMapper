@@ -114,14 +114,14 @@ public final class ActionRunner {
 
         case .openURL(let string):
             guard let url = URL(string: string), url.scheme != nil else {
-                onError("无效的链接：\(string)")
+                onError(L10n.format("无效的链接：%@", string))
                 return
             }
-            if !NSWorkspace.shared.open(url) { onError("没有 App 能打开 \(string)") }
+            if !NSWorkspace.shared.open(url) { onError(L10n.format("没有 App 能打开 %@", string)) }
 
         case .launchApp(let bundleID):
             guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-                onError("未找到 App：\(bundleID)")
+                onError(L10n.format("未找到 App：%@", bundleID))
                 return
             }
             let configuration = NSWorkspace.OpenConfiguration()
@@ -129,7 +129,7 @@ public final class ActionRunner {
             do {
                 try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
             } catch {
-                onError("无法打开 \(bundleID)：\(error.localizedDescription)")
+                onError(L10n.format("无法打开 %@：%@", bundleID, error.localizedDescription))
             }
 
         case .shell, .appleScript:
@@ -170,7 +170,7 @@ public final class ActionRunner {
 
     private func startDictation(submit: Bool, owner: RemoteButton?) {
         guard let dictation else {
-            onError("语音输入不可用")
+            onError(L10n.text("语音输入不可用"))
             return
         }
         dictationOwner = owner
@@ -195,7 +195,7 @@ public final class ActionRunner {
 
     private func requireAccessibility() -> Bool {
         if Self.hasAccessibility { return true }
-        onError("需要「辅助功能」权限才能模拟按键")
+        onError(L10n.text("需要「辅助功能」权限才能模拟按键"))
         return false
     }
 }

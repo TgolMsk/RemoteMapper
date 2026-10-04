@@ -15,11 +15,11 @@ enum SystemControl {
                 lockScreen()
                 try? await Task.sleep(for: .milliseconds(800))
             }
-            return await ScriptExecutor.run("/usr/bin/pmset", ["displaysleepnow"], label: "关闭显示器")
+            return await ScriptExecutor.run("/usr/bin/pmset", ["displaysleepnow"], label: L10n.text("关闭显示器"))
         case .unlock: return await LockScreen.unlock()
-        case .sleep: return send(kAESleep, name: "休眠")
-        case .restart: return send(kAERestart, name: "重启")
-        case .shutDown: return send(kAEShutDown, name: "关机")
+        case .sleep: return send(kAESleep, name: SystemCommand.sleep.displayName)
+        case .restart: return send(kAERestart, name: SystemCommand.restart.displayName)
+        case .shutDown: return send(kAEShutDown, name: SystemCommand.shutDown.displayName)
         case .powerMenu: return nil
         }
     }
@@ -39,7 +39,7 @@ enum SystemControl {
             _ = try event.sendEvent(options: [.noReply], timeout: 10)
             return nil
         } catch {
-            return "\(name)失败：\(error.localizedDescription)"
+            return L10n.format("%@失败：%@", name, error.localizedDescription)
         }
     }
 }

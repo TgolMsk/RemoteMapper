@@ -21,7 +21,7 @@ struct MappingPane: View {
                 case .touch:
                     TouchHeader()
                     if model.selectedProfile.isPointerMode {
-                        Text("鼠标模式下触控板用于移动光标，没有触控手势。在「按键」中设置鼠标模式下各个键的作用。")
+                        Text(L10n.text("鼠标模式下触控板用于移动光标，没有触控手势。在「按键」中设置鼠标模式下各个键的作用。"))
                             .font(.system(size: 12.5))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,13 +55,13 @@ struct AccessibilityBanner: View {
                 .frame(width: 34, height: 34)
                 .background(Theme.warning.gradient, in: .rect(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text("需要「辅助功能」权限").font(.system(size: 13, weight: .semibold))
-                Text("授权后才能模拟按键、拦截系统媒体键。打开链接、运行命令不受影响。")
+                Text(L10n.text("需要「辅助功能」权限")).font(.system(size: 13, weight: .semibold))
+                Text(L10n.text("授权后才能模拟按键、拦截系统媒体键。打开链接、运行命令不受影响。"))
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("前往授权") { model.requestAccessibility() }
+            Button(L10n.text("前往授权")) { model.requestAccessibility() }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.warning)
         }
@@ -79,7 +79,7 @@ struct ProfileStrip: View {
     var body: some View {
         let selected = model.selectedProfile
         VStack(alignment: .leading, spacing: 10) {
-            Text("配置").eyebrowStyle().padding(.horizontal, 4)
+            Text(L10n.text("配置")).eyebrowStyle().padding(.horizontal, 4)
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(model.config.profiles) { profile in
@@ -91,7 +91,7 @@ struct ProfileStrip: View {
                             }
                             .contextMenu {
                                 if !profile.isGlobal, !profile.isPointerMode {
-                                    Button("删除「\(profile.name)」配置", role: .destructive) { model.deleteProfile(profile.id) }
+                                    Button(L10n.format("删除「%@」配置", String(profile.displayName)), role: .destructive) { model.deleteProfile(profile.id) }
                                 }
                             }
                     }
@@ -111,13 +111,13 @@ struct ProfileStrip: View {
     }
 
     private func profileCaption(_ profile: Profile) -> String {
-        if profile.isGlobal { return "在任何 App 中生效。App 专属配置中未设置的按键，也会沿用这里的设置。" }
+        if profile.isGlobal { return L10n.text("在任何 App 中生效。App 专属配置中未设置的按键，也会沿用这里的设置。") }
         if profile.isPointerMode {
-            return "触控板用途为「鼠标」时生效，优先于 App 专属配置；这里未设置的按键沿用原来的映射。"
-                + (model.config.touch.mode == .pointer ? "" : "当前为手势模式，未生效。")
+            return L10n.text("触控板用途为「鼠标」时生效，优先于 App 专属配置；这里未设置的按键沿用原来的映射。")
+                + (model.config.touch.mode == .pointer ? "" : L10n.text("当前为手势模式，未生效。"))
         }
         let names = profile.bundleIDs.map(AppInfo.name(for:)).joined(separator: "、")
-        return "当 \(names) 位于前台时生效，未设置的按键沿用全局。"
+        return L10n.format("当 %@ 位于前台时生效，未设置的按键沿用全局。", String(names))
     }
 }
 
@@ -131,11 +131,11 @@ struct ProfilePill: View {
     var body: some View {
         HStack(spacing: 7) {
             icon.frame(width: 18, height: 18)
-            Text(profile.name)
+            Text(profile.displayName)
                 .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
             if isActive {
                 Circle().fill(Theme.live).frame(width: 6, height: 6)
-                    .help("当前生效中")
+                    .help(L10n.text("当前生效中"))
             }
         }
         .padding(.leading, 9)
@@ -175,7 +175,7 @@ struct AddProfileButton: View {
         Menu {
             let candidates = runningApps
             if !candidates.isEmpty {
-                SwiftUI.Section("正在运行") {
+                SwiftUI.Section(L10n.text("正在运行")) {
                     ForEach(candidates, id: \.bundleIdentifier) { app in
                         Button {
                             withAnimation { model.addAppProfile(bundleID: app.bundleIdentifier!) }
@@ -187,9 +187,9 @@ struct AddProfileButton: View {
                 }
             }
             Divider()
-            Button("从「应用程序」中选择…") { chooseApp() }
+            Button(L10n.text("从「应用程序」中选择…")) { chooseApp() }
         } label: {
-            Label("App 专属配置", systemImage: "plus")
+            Label(L10n.text("App 专属配置"), systemImage: "plus")
                 .font(.system(size: 12.5, weight: .medium))
         }
         .menuStyle(.button)
@@ -260,9 +260,9 @@ struct ButtonHeader: View {
         let profile = model.selectedProfile
         if !profile.isGlobal {
             if model.mapping(button, in: profile.id) != nil {
-                Tag(text: "\(profile.name) 专属", tint: Theme.accent)
+                Tag(text: L10n.format("%@ 专属", String(profile.displayName)), tint: Theme.accent)
             } else {
-                Tag(text: profile.isPointerMode ? "沿用原映射" : "沿用全局")
+                Tag(text: profile.isPointerMode ? L10n.text("沿用原映射") : L10n.text("沿用全局"))
             }
         }
     }
@@ -282,7 +282,7 @@ struct ButtonHeader: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
-        .help(offset < 0 ? "上一个按键" : "下一个按键")
+        .help(offset < 0 ? L10n.text("上一个按键") : L10n.text("下一个按键"))
     }
 }
 
@@ -347,10 +347,10 @@ struct GestureCard: View {
 
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("手势").eyebrowStyle()
+                Text(L10n.text("手势")).eyebrowStyle()
                 Spacer()
                 if inherited != nil {
-                    Text("显示的是全局设置，编辑后将为此 App 单独保存")
+                    Text(L10n.text("显示的是全局设置，编辑后将为此 App 单独保存"))
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                 }
@@ -451,11 +451,11 @@ struct BindingRow: View {
 
     @ViewBuilder private var trailing: some View {
         if isDropTargeted {
-            Label("松开即绑定：放映这份文稿", systemImage: "play.rectangle.on.rectangle")
+            Label(L10n.text("松开即绑定：放映这份文稿"), systemImage: "play.rectangle.on.rectangle")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.accent)
         } else if isBlocked {
-            Text("已由「按住」接管").font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(L10n.text("已由「按住」接管")).font(.system(size: 12)).foregroundStyle(.secondary)
         } else if let bound {
             HStack(spacing: 10) {
                 BindingChip(bound: bound, isInherited: isInherited)
@@ -469,13 +469,13 @@ struct BindingRow: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .opacity(isHovered ? 1 : 0)
-                    .help("移除")
+                    .help(L10n.text("移除"))
                 }
             }
         } else {
             HStack(spacing: 6) {
                 Image(systemName: "plus").font(.system(size: 10, weight: .bold))
-                Text("添加动作").font(.system(size: 12, weight: .medium))
+                Text(L10n.text("添加动作")).font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(isHovered ? Theme.accent : Color.secondary.opacity(0.8))
         }
@@ -508,7 +508,7 @@ struct BindingChip: View {
                     .frame(maxWidth: 150, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            if isInherited { Tag(text: "全局") }
+            if isInherited { Tag(text: L10n.text("全局")) }
         }
         .opacity(isInherited ? 0.6 : 1)
     }
@@ -527,13 +527,13 @@ struct OptionsCard: View {
         let canRepeat = mapping.map { $0.tap != nil && $0.boundGestures == [.tap] } ?? false
         let isAppProfile = !model.selectedProfile.isGlobal
 
-        SettingsGroup("选项") {
-            SettingRow(title: "按住时连续触发",
-                       detail: canRepeat ? "按住不放时按键盘重复速率连续触发「单击」，适合方向键。"
-                                         : "仅在只设置了「单击」时可用。",
+        SettingsGroup(L10n.text("选项")) {
+            SettingRow(title: L10n.text("按住时连续触发"),
+                       detail: canRepeat ? L10n.text("按住不放时按键盘重复速率连续触发「单击」，适合方向键。")
+                                         : L10n.text("仅在只设置了「单击」时可用。"),
                        symbol: "repeat",
                        showsDivider: button.isSystemMediaKey || (isAppProfile && own != nil)) {
-                Toggle("按住时连续触发", isOn: Binding(
+                Toggle(L10n.text("按住时连续触发"), isOn: Binding(
                     get: { mapping?.repeatWhileHeld ?? false },
                     set: { value in
                         guard var updated = mapping else { return }
@@ -546,19 +546,19 @@ struct OptionsCard: View {
                     .disabled(!canRepeat)
             }
             if button.isSystemMediaKey {
-                SettingRow(title: "系统媒体键",
-                           detail: "映射后会拦截该键原本的音量 / 播放功能；不设置任何手势则保持系统默认。",
+                SettingRow(title: L10n.text("系统媒体键"),
+                           detail: L10n.text("映射后会拦截该键原本的音量 / 播放功能；不设置任何手势则保持系统默认。"),
                            symbol: "speaker.wave.2",
                            showsDivider: isAppProfile && own != nil) {
                     EmptyView()
                 }
             }
             if isAppProfile && own != nil {
-                SettingRow(title: "恢复为全局设置",
-                           detail: "移除此按键在「\(model.selectedProfile.name)」中的专属设置。",
+                SettingRow(title: L10n.text("恢复为全局设置"),
+                           detail: L10n.format("移除此按键在「%@」中的专属设置。", String(model.selectedProfile.displayName)),
                            symbol: "arrow.uturn.backward",
                            showsDivider: false) {
-                    Button("恢复") {
+                    Button(L10n.text("恢复")) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             model.setMapping(nil, for: button, in: profileID)
                         }
@@ -613,11 +613,11 @@ struct PointerModeSwitch: View {
 
     var body: some View {
         let isOn = model.config.touch.mode == .pointer
-        SettingsGroup("鼠标模式") {
-            SettingRow(title: "启用鼠标模式",
-                       detail: "单指移动光标，右侧上下滑或沿外圈转动即滚动；侧面 Siri 键单击为确定、双击切换为整面滚轮。",
+        SettingsGroup(L10n.text("鼠标模式")) {
+            SettingRow(title: L10n.text("启用鼠标模式"),
+                       detail: L10n.text("单指移动光标，右侧上下滑或沿外圈转动即滚动；侧面 Siri 键单击为确定、双击切换为整面滚轮。"),
                        symbol: "cursorarrow.motionlines", showsDivider: false) {
-                Toggle("启用鼠标模式", isOn: Binding(get: { isOn }, set: { model.config.touch.mode = $0 ? .pointer : .gestures }))
+                Toggle(L10n.text("启用鼠标模式"), isOn: Binding(get: { isOn }, set: { model.config.touch.mode = $0 ? .pointer : .gestures }))
                     .toggleStyle(.switch).labelsHidden().tint(Theme.accent)
             }
         }
@@ -628,26 +628,26 @@ struct TouchHeader: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let status = model.engine.touch?.status ?? .unavailable("此版本不支持")
+        let status = model.engine.touch?.status ?? .unavailable(L10n.text("此版本不支持"))
         let surfaceSize = model.engine.touch?.surfaceSize
         HStack(alignment: .center, spacing: 16) {
             KeyGlyph(symbol: "hand.draw", size: 58)
             VStack(alignment: .leading, spacing: 7) {
-                Text("触控手势").font(.system(size: 24, weight: .semibold))
+                Text(L10n.text("触控手势")).font(.system(size: 24, weight: .semibold))
                 HStack(spacing: 6) {
                     if let size = surfaceSize {
                         Tag(text: String(format: "%.1f × %.1f mm", size.width, size.height), mono: true)
                     }
                     switch status {
-                    case .running: Tag(text: "触控面已识别", tint: Theme.live)
-                    case .notFound: Tag(text: "未找到触控面", tint: Theme.warning)
+                    case .running: Tag(text: L10n.text("触控面已识别"), tint: Theme.live)
+                    case .notFound: Tag(text: L10n.text("未找到触控面"), tint: Theme.warning)
                     case .unavailable(let message): Tag(text: message, tint: Theme.warning)
-                    case .idle: Tag(text: "等待遥控器连接")
+                    case .idle: Tag(text: L10n.text("等待遥控器连接"))
                     }
                     if !model.config.touch.isEnabled {
-                        Tag(text: "已在通用设置中关闭", tint: Theme.warning)
+                        Tag(text: L10n.text("已在通用设置中关闭"), tint: Theme.warning)
                     } else if model.config.touch.mode == .pointer {
-                        Tag(text: "鼠标模式中，手势暂不触发", tint: Theme.warning)
+                        Tag(text: L10n.text("鼠标模式中，手势暂不触发"), tint: Theme.warning)
                     }
                 }
             }
@@ -665,9 +665,9 @@ struct TouchCard: View {
         let isAppProfile = !model.selectedProfile.isGlobal
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("滑动").eyebrowStyle()
+                Text(L10n.text("滑动")).eyebrowStyle()
                 Spacer()
-                Text("快速滑过后抬起；按压触控板时不会触发")
+                Text(L10n.text("快速滑过后抬起；按压触控板时不会触发"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
@@ -675,9 +675,9 @@ struct TouchCard: View {
             rows([.swipeUp, .swipeDown, .swipeLeft, .swipeRight], profileID: profileID, isAppProfile: isAppProfile)
 
             HStack {
-                Text("转动").eyebrowStyle()
+                Text(L10n.text("转动")).eyebrowStyle()
                 Spacer()
-                Text("每转过 \(Int(model.config.touch.rotationStep))° 触发一次，可在「通用」中调整")
+                Text(L10n.format("每转过 %@° 触发一次，可在「通用」中调整", String(Int(model.config.touch.rotationStep))))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }

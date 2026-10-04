@@ -12,37 +12,37 @@ public enum RemoteButton: String, CaseIterable, Codable, CodingKeyRepresentable,
 
     public var displayName: String {
         switch self {
-        case .tv: "TV / 控制中心"
-        case .volumeUp: "音量 +"
-        case .volumeDown: "音量 −"
-        case .select: "触控板按下"
-        case .power: "电源"
+        case .tv: L10n.text("TV / 控制中心")
+        case .volumeUp: L10n.text("音量 +")
+        case .volumeDown: L10n.text("音量 −")
+        case .select: L10n.text("触控板按下")
+        case .power: L10n.text("电源")
         case .siri: "Siri"
-        case .back: "返回"
-        case .mute: "静音"
-        case .playPause: "播放 / 暂停"
-        case .up: "方向 · 上"
-        case .right: "方向 · 右"
-        case .down: "方向 · 下"
-        case .left: "方向 · 左"
+        case .back: L10n.text("返回")
+        case .mute: L10n.text("静音")
+        case .playPause: L10n.text("播放 / 暂停")
+        case .up: L10n.text("方向 · 上")
+        case .right: L10n.text("方向 · 右")
+        case .down: L10n.text("方向 · 下")
+        case .left: L10n.text("方向 · 左")
         }
     }
 
     public var shortName: String {
         switch self {
         case .tv: "TV"
-        case .volumeUp: "音量+"
-        case .volumeDown: "音量−"
-        case .select: "按下"
-        case .power: "电源"
+        case .volumeUp: L10n.text("音量+")
+        case .volumeDown: L10n.text("音量−")
+        case .select: L10n.text("按下")
+        case .power: L10n.text("电源")
         case .siri: "Siri"
-        case .back: "返回"
-        case .mute: "静音"
-        case .playPause: "播放"
-        case .up: "上"
-        case .right: "右"
-        case .down: "下"
-        case .left: "左"
+        case .back: L10n.text("返回")
+        case .mute: L10n.text("静音")
+        case .playPause: L10n.text("播放")
+        case .up: L10n.text("上")
+        case .right: L10n.text("右")
+        case .down: L10n.text("下")
+        case .left: L10n.text("左")
         }
     }
 

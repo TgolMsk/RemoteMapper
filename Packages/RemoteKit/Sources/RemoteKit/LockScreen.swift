@@ -24,8 +24,8 @@ public enum LockScreen {
             return nil
         }
         let password: String?
-        do { password = try UnlockPassword.read() } catch { return "解锁失败：\(error.localizedDescription)" }
-        guard let password, !password.isEmpty else { return "未设置解锁密码：在「通用 › 锁屏解锁」中设置" }
+        do { password = try UnlockPassword.read() } catch { return L10n.format("解锁失败：%@", error.localizedDescription) }
+        guard let password, !password.isEmpty else { return L10n.text("未设置解锁密码：在「通用 › 锁屏解锁」中设置") }
         await focusPasswordField()
         await KeyboardSynth.typeKeystrokes(password)
         try? await Task.sleep(for: .milliseconds(60))

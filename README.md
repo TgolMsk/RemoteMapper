@@ -15,6 +15,18 @@ make install    # Release 版安装到 /Applications（开机自启需要从这�
 
 依赖：Xcode 27、macOS 26、[XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`）。
 
+## 界面语言
+
+支持简体中文、繁体中文、英语、日语、韩语、法语、德语、西班牙语、葡萄牙语（巴西）、意大利语、俄语和阿拉伯语。默认跟随 macOS 的首个受支持语言，无法匹配时使用英语。在「通用 › 语言 › 界面语言」中可手动切换，立即生效并记住选择。
+
+界面语言与「语音输入 › 识别语言」分别设置。切换界面语言不会改写 `config.json`、用户自定义配置名、动作名或文本内容；内置预设和默认配置名按当前界面语言显示。系统权限说明提供各语言译文，macOS 原生对话框按系统的应用语言设置显示。
+
+本地化资源在 `Packages/RemoteKit/Sources/RemoteKit/Resources/*.lproj/Localizable.strings`，权限说明在 `App/Resources/*.lproj/InfoPlist.strings`。修改界面文案后运行 `python3 scripts/check-localizations.py` 检查各语言键及格式参数；可使用以下命令生成指定语言的界面截图（语言参数只影响本次运行）：
+
+```bash
+build/DerivedData/Build/Products/Debug/RemoteMapper.app/Contents/MacOS/RemoteMapper --snapshot "$PWD/build/snapshots-en" --language en
+```
+
 ## 下载与发布
 
 只通过网页下载安装，不上架 App Store（触控面依赖私有框架，Shell、AppleScript、电源控制等也无法在沙盒中运行）。

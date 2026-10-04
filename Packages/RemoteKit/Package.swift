@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "RemoteKit",
+    defaultLocalization: "en",
     platforms: [.macOS(.v26)],
     products: [
         .library(name: "RemoteKit", targets: ["RemoteKit"]),
@@ -10,6 +11,7 @@ let package = Package(
     targets: [
         .target(
             name: "RemoteKit",
+            resources: [.process("Resources")],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(

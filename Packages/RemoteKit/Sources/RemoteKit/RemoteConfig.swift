@@ -24,6 +24,18 @@ public struct Profile: Codable, Hashable, Identifiable, Sendable {
 
     public var isGlobal: Bool { bundleIDs.isEmpty && !isPointerMode }
 
+    /// 内置配置名按界面语言显示，用户重命名或自建的同名配置保留原文。
+    public var displayName: String {
+        let isBuiltInName = switch name {
+        case "全局": isGlobal
+        case "鼠标模式": isPointerMode
+        case "终端": !isPointerMode && Set(bundleIDs) == Set([KnownApp.iTerm, KnownApp.terminal])
+        case "演示": !isPointerMode && Set(bundleIDs) == Set([KnownApp.wps, KnownApp.powerPoint])
+        default: false
+        }
+        return isBuiltInName ? L10n.text(name) : name
+    }
+
     public func mapping(for button: RemoteButton) -> ButtonMapping? {
         mappings[button].flatMap { $0.isEmpty ? nil : $0 }
     }

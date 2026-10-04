@@ -66,23 +66,23 @@ public indirect enum Action: Hashable, Sendable {
 
         public var displayName: String {
             switch self {
-            case .keystroke: "快捷键"
-            case .holdKey: "按住按键"
-            case .text: "输入文本"
-            case .scroll: "滚动"
-            case .dictation: "语音输入"
-            case .openURL: "打开链接"
-            case .launchApp: "打开 App"
-            case .shell: "Shell 命令"
+            case .keystroke: L10n.text("快捷键")
+            case .holdKey: L10n.text("按住按键")
+            case .text: L10n.text("输入文本")
+            case .scroll: L10n.text("滚动")
+            case .dictation: L10n.text("语音输入")
+            case .openURL: L10n.text("打开链接")
+            case .launchApp: L10n.text("打开 App")
+            case .shell: L10n.text("Shell 命令")
             case .appleScript: "AppleScript"
-            case .dotCall: "dot 通话"
-            case .mouseButton: "鼠标按键"
-            case .pointerScroll: "按住滚动"
-            case .toggleTouchMode: "切换触控鼠标"
-            case .system: "电源与锁屏"
-            case .playSlides: "放映演示文稿"
-            case .sequence: "组合动作"
-            case .delay: "等待"
+            case .dotCall: L10n.text("dot 通话")
+            case .mouseButton: L10n.text("鼠标按键")
+            case .pointerScroll: L10n.text("按住滚动")
+            case .toggleTouchMode: L10n.text("切换触控鼠标")
+            case .system: L10n.text("电源与锁屏")
+            case .playSlides: L10n.text("放映演示文稿")
+            case .sequence: L10n.text("组合动作")
+            case .delay: L10n.text("等待")
             }
         }
 
@@ -189,13 +189,13 @@ public enum SystemCommand: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .lockScreen: "锁屏"
-        case .displaySleep: "锁屏并关闭显示器"
-        case .unlock: "解锁屏幕"
-        case .sleep: "休眠"
-        case .restart: "重启"
-        case .shutDown: "关机"
-        case .powerMenu: "电源菜单"
+        case .lockScreen: L10n.text("锁屏")
+        case .displaySleep: L10n.text("锁屏并关闭显示器")
+        case .unlock: L10n.text("解锁屏幕")
+        case .sleep: L10n.text("休眠")
+        case .restart: L10n.text("重启")
+        case .shutDown: L10n.text("关机")
+        case .powerMenu: L10n.text("电源菜单")
         }
     }
 }
@@ -205,10 +205,10 @@ public enum ScrollDirection: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .up: "向上"
-        case .down: "向下"
-        case .left: "向左"
-        case .right: "向右"
+        case .up: L10n.text("向上")
+        case .down: L10n.text("向下")
+        case .left: L10n.text("向左")
+        case .right: L10n.text("向右")
         }
     }
 
@@ -236,7 +236,22 @@ public struct BoundAction: Codable, Hashable, Sendable {
         self.presetID = presetID
     }
 
-    public var displayTitle: String { title?.nilIfBlank ?? action.kind.displayName }
+    public var displayTitle: String {
+        guard let title = title?.nilIfBlank else { return action.kind.displayName }
+        // 保留配置里的原始名称；只翻译仍使用默认名称的预设，用户改名保持原样。
+        if let presetID, let preset = Preset.find(presetID), title == preset.title {
+            return preset.displayTitle
+        }
+        // 早期内置导航映射没有 presetID；必须同时匹配名称和动作，避免翻译同名的自定义动作。
+        switch (title, action) {
+        case ("方向键", .keystroke(let combo)) where [.upArrow, .downArrow, .leftArrow, .rightArrow].contains(combo):
+            return L10n.text("方向键")
+        case ("确认", .keystroke(.returnKey)), ("返回", .keystroke(.escape)), ("确定", .mouseButton(.left)):
+            return L10n.text(title)
+        default:
+            return title
+        }
+    }
     public var displaySymbol: String { symbol ?? action.kind.symbol }
 }
 
@@ -246,18 +261,18 @@ public extension Action {
         switch self {
         case .keystroke(let combo), .holdKey(let combo): combo.displayString
         case .text(let text, let submit): "“\(text.prefix(24))”" + (submit ? " ↩" : "")
-        case .scroll(let direction, let lines): "\(direction.displayName) \(lines) 行"
-        case .dictation(let submit): submit ? "转文字后发送" : "转为文字"
+        case .scroll(let direction, let lines): L10n.format("%@ %d 行", direction.displayName, lines)
+        case .dictation(let submit): L10n.text(submit ? "转文字后发送" : "转为文字")
         case .openURL(let url): url
         case .launchApp(let bundleID): bundleID
         case .shell(let command): command.split(separator: "\n").first.map(String.init) ?? ""
         case .appleScript(let source): source.split(separator: "\n").first.map(String.init) ?? ""
         case .dotCall(let operation): "dot · \(operation.displayName)"
-        case .mouseButton(let button): "鼠标\(button.displayName)"
-        case .pointerScroll: "按住时滑动即滚动"
-        case .toggleTouchMode: "手势 ⇄ 鼠标"
+        case .mouseButton(let button): L10n.format("鼠标%@", button.displayName)
+        case .pointerScroll: L10n.text("按住时滑动即滚动")
+        case .toggleTouchMode: L10n.text("手势 ⇄ 鼠标")
         case .system(let command): command.displayName
-        case .playSlides(let path, let unlock): (path as NSString).lastPathComponent + (unlock ? " · 先解锁" : "")
+        case .playSlides(let path, let unlock): (path as NSString).lastPathComponent + (unlock ? L10n.text(" · 先解锁") : "")
         case .sequence(let actions): actions.filter { $0.kind != .delay }.map(\.summary).joined(separator: " → ")
         case .delay(let ms): "\(ms) ms"
         }

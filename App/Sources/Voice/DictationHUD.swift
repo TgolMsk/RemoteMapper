@@ -92,7 +92,7 @@ struct DictationHUDView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(headline(dictation.phase))
                     .font(.system(size: 10, weight: .semibold))
-                    .tracking(0.5)
+                    .tracking(L10n.language.isRightToLeft ? 0 : 0.5)
                     .foregroundStyle(headlineColor(dictation.phase))
                 Text(bodyText(dictation))
                     .font(.system(size: 13, weight: .medium))
@@ -118,6 +118,8 @@ struct DictationHUDView: View {
         .frame(width: 400)
         .hudBackground()
         .padding(.bottom, 20)
+        .environment(\.locale, L10n.locale)
+        .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight)
         .onChange(of: dictation.level) {
             levels.removeFirst()
             levels.append(dictation.level)
@@ -127,10 +129,10 @@ struct DictationHUDView: View {
 
     private func headline(_ phase: VoiceDictation.Phase) -> String {
         switch phase {
-        case .starting: "准备中"
-        case .listening: model.engine.dictation.endsOnRelease ? "正在聆听 · 松开遥控器结束" : "正在聆听 · 再按一次结束"
-        case .finishing: "正在识别"
-        case .failed: "语音输入不可用"
+        case .starting: L10n.text("准备中")
+        case .listening: model.engine.dictation.endsOnRelease ? L10n.text("正在聆听 · 松开遥控器结束") : L10n.text("正在聆听 · 再按一次结束")
+        case .finishing: L10n.text("正在识别")
+        case .failed: L10n.text("语音输入不可用")
         case .idle: ""
         }
     }
@@ -143,7 +145,7 @@ struct DictationHUDView: View {
     private func bodyText(_ dictation: VoiceDictation) -> String {
         if case .failed(let message) = dictation.phase { return message }
         if !dictation.transcript.isEmpty { return dictation.transcript }
-        return dictation.phase == .listening ? "请说话…" : "…"
+        return dictation.phase == .listening ? L10n.text("请说话…") : "…"
     }
 }
 

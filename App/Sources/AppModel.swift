@@ -12,9 +12,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .mapping: "按键映射"
-        case .general: "通用"
-        case .diagnostics: "权限与诊断"
+        case .mapping: L10n.text("按键映射")
+        case .general: L10n.text("通用")
+        case .diagnostics: L10n.text("权限与诊断")
         }
     }
 }
@@ -24,7 +24,7 @@ enum MappingMode: String, CaseIterable, Identifiable {
     case buttons, touch
 
     var id: String { rawValue }
-    var title: String { self == .buttons ? "按键" : "触控手势" }
+    var title: String { self == .buttons ? L10n.text("按键") : L10n.text("触控手势") }
     var symbol: String { self == .buttons ? "circle.grid.2x2" : "hand.draw" }
 }
 
@@ -36,7 +36,7 @@ enum EditorTarget: Hashable {
     var title: String {
         switch self {
         case .button(let button, let gesture): "\(button.displayName) · \(gesture.displayName)"
-        case .touch(let gesture): "触控 · \(gesture.displayName)"
+        case .touch(let gesture): L10n.format("触控 · %@", String(gesture.displayName))
         }
     }
 
@@ -306,11 +306,11 @@ extension AppModel {
         model.engine.battery.simulate(level: 82)
         let now = Date()
         model.engine.appendPreviewLog([
-            LogEntry(date: now, button: nil, gesture: nil, touch: .swipeRight, title: "下一个标签页", kind: .action),
-            LogEntry(date: now.addingTimeInterval(-2), button: .siri, gesture: .hold, title: "按住说话", kind: .action),
-            LogEntry(date: now.addingTimeInterval(-4), button: .playPause, gesture: .tap, title: "切换权限模式", kind: .action),
-            LogEntry(date: now.addingTimeInterval(-9), button: .tv, gesture: .longPress, title: "切换到 Codex", kind: .action),
-            LogEntry(date: now.addingTimeInterval(-15), button: .volumeUp, gesture: nil, title: "未映射 · 系统默认", kind: .passthrough),
+            LogEntry(date: now, button: nil, gesture: nil, touch: .swipeRight, title: L10n.text("下一个标签页"), kind: .action),
+            LogEntry(date: now.addingTimeInterval(-2), button: .siri, gesture: .hold, title: L10n.text("按住说话"), kind: .action),
+            LogEntry(date: now.addingTimeInterval(-4), button: .playPause, gesture: .tap, title: L10n.text("切换权限模式"), kind: .action),
+            LogEntry(date: now.addingTimeInterval(-9), button: .tv, gesture: .longPress, title: L10n.text("切换到 Codex"), kind: .action),
+            LogEntry(date: now.addingTimeInterval(-15), button: .volumeUp, gesture: nil, title: L10n.text("未映射 · 系统默认"), kind: .passthrough),
         ], frontmost: KnownApp.iTerm)
         return model
     }

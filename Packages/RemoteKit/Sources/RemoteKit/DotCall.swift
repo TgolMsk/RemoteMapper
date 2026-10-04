@@ -12,10 +12,10 @@ public enum DotCallOperation: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .toggle: "呼叫 / 挂断"
-        case .start: "呼叫"
-        case .hangUp: "挂断"
-        case .toggleMute: "切换静音"
+        case .toggle: L10n.text("呼叫 / 挂断")
+        case .start: L10n.text("呼叫")
+        case .hangUp: L10n.text("挂断")
+        case .toggleMute: L10n.text("切换静音")
         }
     }
 }
@@ -33,11 +33,11 @@ nonisolated public enum DotCall {
 
     /// 执行操作，失败时返回错误说明。无障碍树遍历较慢，放在主线程之外进行
     @concurrent public static func perform(_ operation: DotCallOperation) async -> String? {
-        guard AXIsProcessTrusted() else { return "需要「辅助功能」权限才能操作 ChatGPT" }
+        guard AXIsProcessTrusted() else { return L10n.text("需要「辅助功能」权限才能操作 ChatGPT") }
         // 有些 App（例如 Electron 应用）在前台时读不到系统焦点，这时用 NSWorkspace 的记录
         let previous = await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier } ?? focusedPID()
         guard let pid = await chatGPTProcess(launchIfNeeded: operation == .start || operation == .toggle) else {
-            return "ChatGPT 没有在运行"
+            return L10n.text("ChatGPT 没有在运行")
         }
         let message = await run(operation, pid: pid)
         // 操作过程中切到了 ChatGPT 的话，切回原来的 App
@@ -68,11 +68,11 @@ nonisolated public enum DotCall {
         case .alreadyDone:
             return nil
         case .noCall:
-            return "当前没有 dot 通话"
+            return L10n.text("当前没有 dot 通话")
         case .missing:
-            return operation == .start || operation == .toggle ? "没有在 ChatGPT 里找到 dot 的呼叫按钮" : "当前没有 dot 通话"
+            return operation == .start || operation == .toggle ? L10n.text("没有在 ChatGPT 里找到 dot 的呼叫按钮") : L10n.text("当前没有 dot 通话")
         case .press(let node):
-            return await click(node, pid: pid) ? nil : "ChatGPT 窗口没有切到前台或被遮挡，未点击"
+            return await click(node, pid: pid) ? nil : L10n.text("ChatGPT 窗口没有切到前台或被遮挡，未点击")
         }
     }
 

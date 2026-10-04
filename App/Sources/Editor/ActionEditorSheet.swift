@@ -14,8 +14,8 @@ enum EditorKind: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .preset: "开发工具预设"
-        case .sequence: "组合动作"
+        case .preset: L10n.text("开发工具预设")
+        case .sequence: L10n.text("组合动作")
         default: actionKind.displayName
         }
     }
@@ -120,7 +120,7 @@ struct ActionEditorSheet: View {
             }
             Spacer()
             if let profile = model.config[context.profileID] {
-                Tag(text: profile.isGlobal ? "全局" : "\(profile.name) 专属", tint: profile.isGlobal ? nil : Theme.accent)
+                Tag(text: profile.isGlobal ? L10n.text("全局") : L10n.format("%@ 专属", String(profile.displayName)), tint: profile.isGlobal ? nil : Theme.accent)
             }
         }
         .padding(.horizontal, 22)
@@ -128,18 +128,20 @@ struct ActionEditorSheet: View {
     }
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            sidebarItem(.preset)
-            Text("自定义")
-                .eyebrowStyle()
-                .padding(.horizontal, 10)
-                .padding(.top, 18)
-                .padding(.bottom, 6)
-            ForEach(EditorKind.custom) { sidebarItem($0) }
-            if !sequence.isEmpty && presetID == nil { sidebarItem(.sequence) }
-            Spacer()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                sidebarItem(.preset)
+                Text(L10n.text("自定义"))
+                    .eyebrowStyle()
+                    .padding(.horizontal, 10)
+                    .padding(.top, 18)
+                    .padding(.bottom, 6)
+                ForEach(EditorKind.custom) { sidebarItem($0) }
+                if !sequence.isEmpty && presetID == nil { sidebarItem(.sequence) }
+            }
+            .padding(12)
         }
-        .padding(12)
+        .scrollIndicators(.never)
         .frame(width: 196)
         .background(Theme.subtleFill.opacity(0.5))
     }
@@ -154,10 +156,12 @@ struct ActionEditorSheet: View {
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 18)
                 Text(item.title).font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .frame(height: 32)
+            .padding(.vertical, 7)
+            .frame(minHeight: 32)
             .foregroundStyle(isSelected ? Theme.accent : .primary)
             .background(isSelected ? Theme.accentFill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
             .contentShape(.rect)
@@ -169,35 +173,35 @@ struct ActionEditorSheet: View {
         switch kind {
         case .preset: presetGrid
         case .keystroke:
-            DetailIntro(title: "快捷键", text: "按一次组合键。点击下方区域后，直接在键盘上按下想要发送的按键。")
+            DetailIntro(title: L10n.text("快捷键"), text: L10n.text("按一次组合键。点击下方区域后，直接在键盘上按下想要发送的按键。"))
             KeyRecorder(combo: $combo)
         case .holdKey:
-            DetailIntro(title: "按住按键", text: "绑定到「按住」时，遥控器按住期间保持按下，并按系统键盘重复速率发送重复事件；终端里的「按住空格说话」依赖这一点。绑定到其它手势时等同于按一次。")
+            DetailIntro(title: L10n.text("按住按键"), text: L10n.text("绑定到「按住」时，遥控器按住期间保持按下，并按系统键盘重复速率发送重复事件；终端里的「按住空格说话」依赖这一点。绑定到其它手势时等同于按一次。"))
             KeyRecorder(combo: $combo)
             if case .touch = context.target {
-                GestureHint(text: "触控手势没有按住阶段，此动作会按一次。")
+                GestureHint(text: L10n.text("触控手势没有按住阶段，此动作会按一次。"))
             } else if case .button(_, let gesture) = context.target, gesture != .hold {
-                GestureHint(text: "此动作最适合绑定到「按住」手势。")
+                GestureHint(text: L10n.text("此动作最适合绑定到「按住」手势。"))
             }
         case .text:
-            DetailIntro(title: "输入文本", text: "以 Unicode 方式直接输入，不受当前输入法影响。可用于发送常用指令，例如「继续」。")
-            CodeField(text: $text, placeholder: "要输入的文字", monospaced: false)
-            Toggle("输入后按 ↩ 发送", isOn: $submit).toggleStyle(.checkbox).padding(.top, 4)
+            DetailIntro(title: L10n.text("输入文本"), text: L10n.text("以 Unicode 方式直接输入，不受当前输入法影响。可用于发送常用指令，例如「继续」。"))
+            CodeField(text: $text, placeholder: L10n.text("要输入的文字"), monospaced: false)
+            Toggle(L10n.text("输入后按 ↩ 发送"), isOn: $submit).toggleStyle(.checkbox).padding(.top, 4)
         case .dictation:
-            DetailIntro(title: "语音输入", text: "用 Mac 的麦克风录音（也可以是 AirPods 或 USB 麦克风），在本机转成文字后输入到当前 App。麦克风与识别语言在「通用 › 语音输入」中设置。")
-            Toggle("识别完成后按 ↩ 发送", isOn: $submit).toggleStyle(.checkbox)
+            DetailIntro(title: L10n.text("语音输入"), text: L10n.text("用 Mac 的麦克风录音（也可以是 AirPods 或 USB 麦克风），在本机转成文字后输入到当前 App。麦克风与识别语言在「通用 › 语音输入」中设置。"))
+            Toggle(L10n.text("识别完成后按 ↩ 发送"), isOn: $submit).toggleStyle(.checkbox)
             if case .button(_, let gesture) = context.target, gesture != .hold {
-                GestureHint(text: "绑定到「按住」最顺手：按下开始、松开结束。绑定到其它手势时，按一次开始、再按一次结束。")
+                GestureHint(text: L10n.text("绑定到「按住」最顺手：按下开始、松开结束。绑定到其它手势时，按一次开始、再按一次结束。"))
             }
         case .scroll:
-            DetailIntro(title: "滚动", text: "按行滚动前台窗口，向下即显示下方内容。绑定到触控转动时，每转过一个步进滚动一次。")
+            DetailIntro(title: L10n.text("滚动"), text: L10n.text("按行滚动前台窗口，向下即显示下方内容。绑定到触控转动时，每转过一个步进滚动一次。"))
             ScrollEditor(direction: $scrollDirection, lines: $scrollLines)
         case .launchApp:
-            DetailIntro(title: "打开 App", text: "启动 App，或在已运行时切换到它的窗口。")
+            DetailIntro(title: L10n.text("打开 App"), text: L10n.text("启动 App，或在已运行时切换到它的窗口。"))
             AppPicker(bundleID: $bundleID)
         case .openURL:
-            DetailIntro(title: "打开链接", text: "支持网页链接与 App 的 URL Scheme。")
-            TextField("例如 claude://claude.ai/new", text: $url)
+            DetailIntro(title: L10n.text("打开链接"), text: L10n.text("支持网页链接与 App 的 URL Scheme。"))
+            TextField(L10n.text("例如 claude://claude.ai/new"), text: $url)
                 .textFieldStyle(.plain)
                 .font(Theme.mono(13))
                 .padding(12)
@@ -216,20 +220,20 @@ struct ActionEditorSheet: View {
             }
             .padding(.top, 8)
         case .playSlides:
-            DetailIntro(title: "放映演示文稿", text: "按一下即解锁、打开文稿并从头全屏放映，支持 WPS、PowerPoint 与 Keynote（Keynote 从所选幻灯片开始）。不先解锁时，会等你自己解锁后再放映。也可以直接把文稿拖到映射页的某个手势上。")
+            DetailIntro(title: L10n.text("放映演示文稿"), text: L10n.text("按一下即解锁、打开文稿并从头全屏放映，支持 WPS、PowerPoint 与 Keynote（Keynote 从所选幻灯片开始）。不先解锁时，会等你自己解锁后再放映。也可以直接把文稿拖到映射页的某个手势上。"))
             SlidesPicker(path: $slidesPath)
-            Toggle("锁屏时先解锁", isOn: $unlockFirst).toggleStyle(.checkbox).padding(.top, 12)
+            Toggle(L10n.text("锁屏时先解锁"), isOn: $unlockFirst).toggleStyle(.checkbox).padding(.top, 12)
             if unlockFirst, !model.hasUnlockPassword {
-                GestureHint(text: "还没有保存解锁密码：在「通用 › 锁屏解锁」中设置。")
+                GestureHint(text: L10n.text("还没有保存解锁密码：在「通用 › 锁屏解锁」中设置。"))
             }
         case .shell:
-            DetailIntro(title: "Shell 命令", text: "在登录 shell（zsh -lc）中后台执行，PATH 与终端一致。非零退出码会显示在实时事件里。")
-            CodeField(text: $command, placeholder: "例如 open -a iTerm ~/Project", monospaced: true)
+            DetailIntro(title: L10n.text("Shell 命令"), text: L10n.text("在登录 shell（zsh -lc）中后台执行，PATH 与终端一致。非零退出码会显示在实时事件里。"))
+            CodeField(text: $command, placeholder: L10n.text("例如 open -a iTerm ~/Project"), monospaced: true)
         case .appleScript:
-            DetailIntro(title: "AppleScript", text: "通过 osascript 执行。首次控制其它 App 时，系统会请求「自动化」授权。")
+            DetailIntro(title: "AppleScript", text: L10n.text("通过 osascript 执行。首次控制其它 App 时，系统会请求「自动化」授权。"))
             CodeField(text: $script, placeholder: "tell application \"iTerm\" to activate", monospaced: true)
         case .sequence:
-            DetailIntro(title: "组合动作", text: "依次执行多个步骤。组合动作目前需在配置文件中编辑。")
+            DetailIntro(title: L10n.text("组合动作"), text: L10n.text("依次执行多个步骤。组合动作目前需在配置文件中编辑。"))
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(sequence.enumerated()), id: \.offset) { index, step in
                     HStack(spacing: 10) {
@@ -268,12 +272,12 @@ struct ActionEditorSheet: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            TextField(kind == .preset ? "显示名称（默认使用预设名称）" : "显示名称（可选）", text: $title)
+            TextField(kind == .preset ? L10n.text("显示名称（默认使用预设名称）") : L10n.text("显示名称（可选）"), text: $title)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 240)
             Spacer()
             if existing != nil {
-                Button("移除动作", role: .destructive) {
+                Button(L10n.text("移除动作"), role: .destructive) {
                     model.setAction(nil, for: context.target, in: context.profileID)
                     dismiss()
                 }
@@ -282,9 +286,9 @@ struct ActionEditorSheet: View {
                 .foregroundStyle(.red)
                 .padding(.trailing, 8)
             }
-            Button("取消") { dismiss() }
+            Button(L10n.text("取消")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
-            Button("保存", action: save)
+            Button(L10n.text("保存"), action: save)
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
@@ -449,10 +453,11 @@ struct PresetCard: View {
                     LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.72)], startPoint: .top, endPoint: .bottom),
                     in: .rect(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(preset.title).font(.system(size: 13, weight: .semibold))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(preset.displayTitle).font(.system(size: 13, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
                     if let preferred = preset.preferredGesture, preferred != gesture {
-                        Text("建议\(preferred.displayName)")
+                        Text(L10n.format("建议%@", String(preferred.displayName)))
                             .font(.system(size: 9.5, weight: .semibold))
                             .foregroundStyle(Theme.warning)
                             .padding(.horizontal, 5)
@@ -460,10 +465,9 @@ struct PresetCard: View {
                             .background(Theme.warning.opacity(0.14), in: .capsule)
                     }
                 }
-                Text(preset.detail)
+                Text(preset.displayDetail)
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -517,10 +521,10 @@ struct ScrollEditor: View {
                 }
             }
             HStack {
-                Text("每次滚动").font(.system(size: 13, weight: .medium))
+                Text(L10n.text("每次滚动")).font(.system(size: 13, weight: .medium))
                 Spacer()
-                Text("\(lines) 行").font(Theme.mono(13, weight: .medium)).contentTransition(.numericText(value: Double(lines)))
-                Stepper("行数", value: $lines, in: 1...20).labelsHidden()
+                Text(L10n.format("%@ 行", String(lines))).font(Theme.mono(13, weight: .medium)).contentTransition(.numericText(value: Double(lines)))
+                Stepper(L10n.text("行数"), value: $lines, in: 1...20).labelsHidden()
             }
             .card(padding: 14)
         }
@@ -544,17 +548,17 @@ struct SlidesPicker: View {
                     .resizable().frame(width: 44, height: 44)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(path.isEmpty ? "尚未选择" : (path as NSString).lastPathComponent)
+                Text(path.isEmpty ? L10n.text("尚未选择") : (path as NSString).lastPathComponent)
                     .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(path.isEmpty ? "把 .pptx、.ppt、.key 或 .dps 文件拖到这里，或点「选择…」" : path)
+                Text(path.isEmpty ? L10n.text("把 .pptx、.ppt、.key 或 .dps 文件拖到这里，或点「选择…」") : path)
                     .font(Theme.mono(11))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(path.isEmpty ? 3 : 1)
                     .truncationMode(.head)
                 if let app {
-                    Label(app.supportsAutoPlay ? "用 \(app.name) 打开并放映" : "默认用 \(app.name) 打开，不支持自动放映",
+                    Label(app.supportsAutoPlay ? L10n.format("用 %@ 打开并放映", String(app.name)) : L10n.format("默认用 %@ 打开，不支持自动放映", String(app.name)),
                           systemImage: app.supportsAutoPlay ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.system(size: 11.5))
                         .foregroundStyle(app.supportsAutoPlay ? Theme.live : Theme.warning)
@@ -562,7 +566,7 @@ struct SlidesPicker: View {
                 }
             }
             Spacer()
-            Button("选择…", action: choose)
+            Button(L10n.text("选择…"), action: choose)
         }
         .card(padding: 14)
     }
@@ -597,18 +601,18 @@ struct AppPicker: View {
                     Image(systemName: "app.dashed").font(.system(size: 30)).foregroundStyle(.tertiary).frame(width: 44, height: 44)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(bundleID.isEmpty ? "尚未选择" : AppInfo.name(for: bundleID))
+                    Text(bundleID.isEmpty ? L10n.text("尚未选择") : AppInfo.name(for: bundleID))
                         .font(.system(size: 14, weight: .semibold))
-                    Text(bundleID.isEmpty ? "从下方选择，或浏览「应用程序」文件夹" : bundleID)
+                    Text(bundleID.isEmpty ? L10n.text("从下方选择，或浏览「应用程序」文件夹") : bundleID)
                         .font(Theme.mono(11))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("浏览…", action: choose)
+                Button(L10n.text("浏览…"), action: choose)
             }
             .card(padding: 14)
 
-            Text("常用").eyebrowStyle()
+            Text(L10n.text("常用")).eyebrowStyle()
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
                 ForEach(suggestions, id: \.self) { id in
                     let isSelected = id == bundleID

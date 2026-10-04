@@ -11,6 +11,8 @@ struct RemoteMapperApp: App {
         MenuBarExtra {
             MenuBarPanel()
                 .environment(model)
+                .environment(\.locale, L10n.locale)
+                .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight)
         } label: {
             Image(systemName: model.engine.device.isConnected ? "appletvremote.gen4.fill" : "appletvremote.gen4")
         }
@@ -19,6 +21,8 @@ struct RemoteMapperApp: App {
         Window("RemoteMapper", id: SettingsWindow.id) {
             SettingsView()
                 .environment(model)
+                .environment(\.locale, L10n.locale)
+                .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)

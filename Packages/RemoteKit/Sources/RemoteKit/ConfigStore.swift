@@ -12,8 +12,17 @@ public final class ConfigStore {
         }
     }
 
-    public private(set) var lastError: String?
+    /// 保留错误的原始信息，切换界面语言时重新生成说明。
+    public var lastError: String? {
+        lastFailure.map { L10n.format($0.key, $0.detail) }
+    }
     public let fileURL: URL
+
+    private struct Failure {
+        let key: String
+        let detail: String
+    }
+    private var lastFailure: Failure?
 
     @ObservationIgnored public var onChange: ((RemoteConfig) -> Void)?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -57,9 +66,9 @@ public final class ConfigStore {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             try encoder.encode(config).write(to: fileURL, options: .atomic)
             lastKnownModification = modificationDate()
-            lastError = nil
+            lastFailure = nil
         } catch {
-            lastError = "保存配置失败：\(error.localizedDescription)"
+            lastFailure = Failure(key: "保存配置失败：%@", detail: error.localizedDescription)
         }
     }
 
@@ -68,14 +77,14 @@ public final class ConfigStore {
             var loaded = try Self.read(fileURL)
             loaded.migrate()
             lastKnownModification = modificationDate()
-            lastError = nil
+            lastFailure = nil
             guard loaded != config else { return }
             isApplyingExternalChange = true
             config = loaded
             isApplyingExternalChange = false
             onChange?(config)
         } catch {
-            lastError = "配置文件无法解析：\(error.localizedDescription)"
+            lastFailure = Failure(key: "配置文件无法解析：%@", detail: error.localizedDescription)
         }
     }
 

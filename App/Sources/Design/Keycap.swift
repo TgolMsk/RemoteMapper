@@ -60,7 +60,7 @@ struct KeyRecorder: View {
             HStack(spacing: 14) {
                 Group {
                     if isRecording {
-                        Text("请按下组合键…")
+                        Text(L10n.text("请按下组合键…"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.accent)
                             .opacity(pulse ? 0.45 : 1)
@@ -68,7 +68,7 @@ struct KeyRecorder: View {
                         KeycapRow(keys: combo.keycaps, large: true)
                             .transition(.scale(scale: 0.9).combined(with: .opacity))
                     } else {
-                        Text("点击后按下要发送的按键")
+                        Text(L10n.text("点击后按下要发送的按键"))
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }

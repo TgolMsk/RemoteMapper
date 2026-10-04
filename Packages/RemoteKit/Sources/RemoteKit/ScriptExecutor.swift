@@ -22,7 +22,7 @@ enum ScriptExecutor {
         do {
             try process.run()
         } catch {
-            return "\(label) 启动失败：\(error.localizedDescription)"
+            return L10n.format("%@ 启动失败：%@", label, error.localizedDescription)
         }
         let status = await withCheckedContinuation { continuation in
             process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
@@ -30,6 +30,7 @@ enum ScriptExecutor {
         guard status != 0 else { return nil }
         let message = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return "\(label) 退出码 \(status)" + (message.isEmpty ? "" : "：\(message.prefix(120))")
+        return message.isEmpty ? L10n.format("%@ 退出码 %d", label, status)
+            : L10n.format("%@ 退出码 %d：%@", label, status, String(message.prefix(120)))
     }
 }

@@ -1,0 +1,5 @@
+// RemoteMapper localization
+"NSAppleEventsUsageDescription" = "RemoteMapper 需要傳送 Apple 事件，以執行你綁定到遙控器上的 AppleScript。";
+"NSBluetoothAlwaysUsageDescription" = "RemoteMapper 透過藍牙讀取 Siri Remote 的電量與連線狀態。";
+"NSMicrophoneUsageDescription" = "語音輸入：按住遙控器上的按鈕時使用麥克風錄音，並在此 Mac 上轉換成文字。";
+"NSSpeechRecognitionUsageDescription" = "語音輸入：在此 Mac 上將你說的話轉換成文字。";

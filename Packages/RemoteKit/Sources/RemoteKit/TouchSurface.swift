@@ -39,7 +39,7 @@ public final class TouchSurface: TouchSource {
         guard device == nil else { return }
         retryTask?.cancel()
         guard let api = MultitouchAPI.shared else {
-            status = .unavailable("无法加载 MultitouchSupport")
+            status = .unavailable(L10n.text("无法加载 MultitouchSupport"))
             return
         }
         guard let list = api.createList()?.takeRetainedValue() else {

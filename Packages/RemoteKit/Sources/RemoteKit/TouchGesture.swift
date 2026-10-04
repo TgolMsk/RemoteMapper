@@ -8,20 +8,23 @@ public enum TouchGesture: String, CaseIterable, Codable, CodingKeyRepresentable,
 
     public var displayName: String {
         switch self {
-        case .swipeUp: "上滑"
-        case .swipeDown: "下滑"
-        case .swipeLeft: "左滑"
-        case .swipeRight: "右滑"
-        case .rotateClockwise: "顺时针转动"
-        case .rotateCounterclockwise: "逆时针转动"
+        case .swipeUp: L10n.text("上滑")
+        case .swipeDown: L10n.text("下滑")
+        case .swipeLeft: L10n.text("左滑")
+        case .swipeRight: L10n.text("右滑")
+        case .rotateClockwise: L10n.text("顺时针转动")
+        case .rotateCounterclockwise: L10n.text("逆时针转动")
         }
     }
 
     public var detail: String {
         switch self {
-        case .swipeUp, .swipeDown, .swipeLeft, .swipeRight: "在触控板上快速\(displayName)后抬起"
-        case .rotateClockwise: "沿外圈顺时针画圈，每转过设定角度触发一次"
-        case .rotateCounterclockwise: "沿外圈逆时针画圈，每转过设定角度触发一次"
+        case .swipeUp: L10n.text("在触控板上快速上滑后抬起")
+        case .swipeDown: L10n.text("在触控板上快速下滑后抬起")
+        case .swipeLeft: L10n.text("在触控板上快速左滑后抬起")
+        case .swipeRight: L10n.text("在触控板上快速右滑后抬起")
+        case .rotateClockwise: L10n.text("沿外圈顺时针画圈，每转过设定角度触发一次")
+        case .rotateCounterclockwise: L10n.text("沿外圈逆时针画圈，每转过设定角度触发一次")
         }
     }
 
@@ -78,8 +81,8 @@ public enum TouchMode: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .gestures: "手势"
-        case .pointer: "鼠标"
+        case .gestures: L10n.text("手势")
+        case .pointer: L10n.text("鼠标")
         }
     }
 }

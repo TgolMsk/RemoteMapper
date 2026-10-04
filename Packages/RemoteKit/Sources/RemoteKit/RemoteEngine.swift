@@ -122,7 +122,7 @@ public final class RemoteEngine {
         runner.onToggleTouchMode = { [unowned self] in
             let mode: TouchMode = self.store.config.touch.mode == .pointer ? .gestures : .pointer
             self.store.config.touch.mode = mode
-            self.append(button: nil, gesture: nil, title: "触控已切换为\(mode.displayName)", kind: .action)
+            self.append(button: nil, gesture: nil, title: L10n.format("触控已切换为%@", mode.displayName), kind: .action)
         }
         runner.onError = { [unowned self] message in self.append(button: nil, gesture: nil, title: message, kind: .error) }
         interceptor.shouldIntercept = { [unowned self] button in
@@ -192,11 +192,11 @@ public final class RemoteEngine {
             if store.config.touch.mode == .pointer { pointer.noteButtonPress() }
         }
         guard store.config.isEnabled else {
-            if isDown { append(button: button, gesture: nil, title: "映射已停用", kind: .passthrough) }
+            if isDown { append(button: button, gesture: nil, title: L10n.text("映射已停用"), kind: .passthrough) }
             return
         }
         if store.config.resolve(button, frontmost: pressFrontmost[button] ?? frontmostBundleID) == nil {
-            if isDown { append(button: button, gesture: nil, title: "未映射 · 系统默认", kind: .passthrough) }
+            if isDown { append(button: button, gesture: nil, title: L10n.text("未映射 · 系统默认"), kind: .passthrough) }
             // 独占时系统收不到遥控器按键，未映射的媒体键由本 App 代为发送
             if device.isExclusive, let key = MediaKeyInterceptor.mediaKey(for: button) { postMediaKey(key, isDown) }
         }
@@ -250,7 +250,7 @@ public final class RemoteEngine {
         powerMenu?.timer.cancel()
         let timer = clock.schedule(after: Self.powerMenuTimeout) { [weak self] in self?.closePowerMenu() }
         powerMenu = (button, timer)
-        statusMessage = StatusMessage(symbol: "power", title: "电源", detail: "再长按 = 关机 ｜ 双击 = 重启 ｜ 其它键取消",
+        statusMessage = StatusMessage(symbol: "power", title: L10n.text("电源"), detail: L10n.text("再长按 = 关机 ｜ 双击 = 重启 ｜ 其它键取消"),
                                       duration: Self.powerMenuTimeout)
     }
 
@@ -266,12 +266,12 @@ public final class RemoteEngine {
         default: nil
         }
         guard let choice else {
-            statusMessage = StatusMessage(symbol: "power", title: "已取消", duration: 1)
-            append(button: button, gesture: gesture, title: "电源菜单已取消", kind: .action)
+            statusMessage = StatusMessage(symbol: "power", title: L10n.text("已取消"), duration: 1)
+            append(button: button, gesture: gesture, title: L10n.text("电源菜单已取消"), kind: .action)
             return true
         }
         statusMessage = StatusMessage(symbol: choice == .restart ? "arrow.clockwise" : "power",
-                                      title: "正在\(choice.displayName)…", duration: 2)
+                                      title: L10n.format("正在%@…", choice.displayName), duration: 2)
         append(button: button, gesture: gesture, title: choice.displayName, kind: .action)
         runner.perform(.system(choice))
         return true
@@ -280,7 +280,7 @@ public final class RemoteEngine {
     private func closePowerMenu() {
         guard powerMenu != nil else { return }
         powerMenu = nil
-        statusMessage = StatusMessage(symbol: "power", title: "已取消", duration: 1)
+        statusMessage = StatusMessage(symbol: "power", title: L10n.text("已取消"), duration: 1)
     }
 
     private func handle(_ frame: TouchFrame) {
@@ -295,7 +295,7 @@ public final class RemoteEngine {
             guard ActionRunner.hasAccessibility else {
                 if !warnedPointerAccess, frame.contacts.contains(where: \.isTouching) {
                     warnedPointerAccess = true
-                    append(button: nil, gesture: nil, title: "需要「辅助功能」权限才能移动光标", kind: .error)
+                    append(button: nil, gesture: nil, title: L10n.text("需要「辅助功能」权限才能移动光标"), kind: .error)
                 }
                 return
             }
@@ -310,7 +310,7 @@ public final class RemoteEngine {
         let isContinuation = gesture.isRotation && log.first?.touch == gesture
             && Date().timeIntervalSince(log.first!.date) < 0.6
         guard let bound = store.config.resolve(gesture, frontmost: frontmostBundleID)?.action else {
-            if !isContinuation { append(button: nil, gesture: nil, touch: gesture, title: "未映射", kind: .passthrough) }
+            if !isContinuation { append(button: nil, gesture: nil, touch: gesture, title: L10n.text("未映射"), kind: .passthrough) }
             return
         }
         let preview = isPreviewOnly()

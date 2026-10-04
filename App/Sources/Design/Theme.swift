@@ -106,7 +106,7 @@ extension View {
     /// 小号大写标题，用于分组名
     func eyebrowStyle() -> some View {
         font(Theme.eyebrow())
-            .tracking(1.2)
+            .tracking(L10n.language.isRightToLeft ? 0 : 1.2)
             .textCase(.uppercase)
             .foregroundStyle(.secondary)
     }
@@ -158,6 +158,7 @@ struct SettingRow<Accessory: View>: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(size: 13, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
                     if let detail {
                         Text(detail)
                             .font(.system(size: 11.5))
@@ -240,8 +241,8 @@ struct BatteryBadge: View {
                 .fixedSize()
         }
         .fixedSize()
-        .help(level <= 15 ? "遥控器电量较低，请及时充电" : "遥控器电量")
+        .help(level <= 15 ? L10n.text("遥控器电量较低，请及时充电") : L10n.text("遥控器电量"))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("遥控器电量 \(level)%")
+        .accessibilityLabel(L10n.format("遥控器电量 %@%%", String(level)))
     }
 }

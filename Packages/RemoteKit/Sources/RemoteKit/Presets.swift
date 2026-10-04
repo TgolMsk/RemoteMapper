@@ -19,14 +19,14 @@ public struct Preset: Identifiable, Sendable {
 
         public var displayName: String {
             switch self {
-            case .voice: "语音输入"
-            case .mouse: "触控鼠标"
-            case .claudeCode: "Claude Code · 终端"
-            case .claudeDesktop: "Claude 桌面版"
+            case .voice: L10n.text("语音输入")
+            case .mouse: L10n.text("触控鼠标")
+            case .claudeCode: L10n.text("Claude Code · 终端")
+            case .claudeDesktop: L10n.text("Claude 桌面版")
             case .codex: "Codex"
             case .dot: "ChatGPT · dot"
-            case .presentation: "演示 · WPS / PowerPoint / Keynote"
-            case .system: "系统"
+            case .presentation: L10n.text("演示 · WPS / PowerPoint / Keynote")
+            case .system: L10n.text("系统")
             }
         }
     }
@@ -39,6 +39,9 @@ public struct Preset: Identifiable, Sendable {
     public let action: Action
     /// 预设更适合绑定的手势，例如按住说话应绑定到「按住」
     public let preferredGesture: RemoteGesture?
+
+    public var displayTitle: String { L10n.text(title) }
+    public var displayDetail: String { L10n.text(detail) }
 
     public var bound: BoundAction { BoundAction(action, title: title, symbol: symbol, presetID: id) }
 

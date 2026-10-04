@@ -1,0 +1,5 @@
+// RemoteMapper localization
+"NSAppleEventsUsageDescription" = "RemoteMapper는 리모컨에 지정한 AppleScript 동작을 실행하기 위해 Apple 이벤트를 전송합니다.";
+"NSBluetoothAlwaysUsageDescription" = "RemoteMapper는 Bluetooth로 Siri Remote의 배터리 잔량과 연결 상태를 확인합니다.";
+"NSMicrophoneUsageDescription" = "음성 입력은 리모컨 버튼을 누르는 동안 마이크로 녹음하고 이 Mac에서 음성을 텍스트로 변환합니다.";
+"NSSpeechRecognitionUsageDescription" = "음성 입력은 이 Mac에서 음성을 텍스트로 변환합니다.";

@@ -124,7 +124,7 @@ extension BatteryMonitor: @MainActor CBCentralManagerDelegate {
         case .poweredOn: findRemote()
         case .unauthorized: status = .unauthorized
         case .poweredOff: status = .bluetoothOff
-        case .unsupported: status = .failed("此 Mac 不支持蓝牙低功耗")
+        case .unsupported: status = .failed(L10n.text("此 Mac 不支持蓝牙低功耗"))
         default: break
         }
     }
@@ -136,7 +136,7 @@ extension BatteryMonitor: @MainActor CBCentralManagerDelegate {
 
     public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         self.peripheral = nil
-        status = .failed(error?.localizedDescription ?? "连接失败")
+        status = .failed(error?.localizedDescription ?? L10n.text("连接失败"))
         scheduleRetry(after: 10)
     }
 

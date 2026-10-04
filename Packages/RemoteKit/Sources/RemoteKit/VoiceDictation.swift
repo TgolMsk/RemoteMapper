@@ -190,20 +190,20 @@ public final class VoiceDictation {
         let access = await ensureMicrophoneAccess()
         guard !Task.isCancelled else { return }
         guard access else {
-            return fail("没有麦克风权限：请在「系统设置 › 隐私与安全性 › 麦克风」中允许")
+            return fail(L10n.text("没有麦克风权限：请在「系统设置 › 隐私与安全性 › 麦克风」中允许"))
         }
         let locale = await resolvedLocale()
         guard !Task.isCancelled else { return }
         guard let locale else {
-            return fail("不支持当前识别语言")
+            return fail(L10n.text("不支持当前识别语言"))
         }
         let transcriber = Self.makeTranscriber(locale)
         let status = await AssetInventory.status(forModules: [transcriber])
         guard !Task.isCancelled else { return }
         guard status == .installed else {
-            if status == .unsupported { return fail("此 Mac 不支持该语言的语音识别") }
+            if status == .unsupported { return fail(L10n.text("此 Mac 不支持该语言的语音识别")) }
             Task { await installModel() }
-            return fail("正在下载语音识别模型，下载完成后即可使用")
+            return fail(L10n.text("正在下载语音识别模型，下载完成后即可使用"))
         }
         guard !Task.isCancelled else { return }
 
@@ -246,7 +246,7 @@ public final class VoiceDictation {
             Self.log.info("开始录音，语言 \(locale.identifier, privacy: .public)")
         } catch {
             guard self.session === session else { return }
-            fail((error as? DictationError)?.message ?? "无法开始录音：\(error.localizedDescription)")
+            fail((error as? DictationError)?.message ?? L10n.format("无法开始录音：%@", error.localizedDescription))
         }
     }
 
@@ -305,10 +305,10 @@ enum DictationError: Error {
 
     var message: String {
         switch self {
-        case .noInputDevice: "没有可用的麦克风：请连接 AirPods、耳机或 USB 麦克风"
-        case .unsupportedFormat: "麦克风的音频格式无法转换"
-        case .inputDeviceUnavailable: "所选麦克风已断开，请在通用设置中重新选择"
-        case .remoteMicrophoneUnavailable: "遥控器麦克风尚未安装：请在「通用 › 语音输入」中安装音频组件"
+        case .noInputDevice: L10n.text("没有可用的麦克风：请连接 AirPods、耳机或 USB 麦克风")
+        case .unsupportedFormat: L10n.text("麦克风的音频格式无法转换")
+        case .inputDeviceUnavailable: L10n.text("所选麦克风已断开，请在通用设置中重新选择")
+        case .remoteMicrophoneUnavailable: L10n.text("遥控器麦克风尚未安装：请在「通用 › 语音输入」中安装音频组件")
         }
     }
 }

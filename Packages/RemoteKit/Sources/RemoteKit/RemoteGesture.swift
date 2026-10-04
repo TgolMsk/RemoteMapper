@@ -7,19 +7,19 @@ public enum RemoteGesture: String, CaseIterable, Codable, Sendable, Identifiable
 
     public var displayName: String {
         switch self {
-        case .tap: "单击"
-        case .doubleTap: "双击"
-        case .longPress: "长按"
-        case .hold: "按住"
+        case .tap: L10n.text("单击")
+        case .doubleTap: L10n.text("双击")
+        case .longPress: L10n.text("长按")
+        case .hold: L10n.text("按住")
         }
     }
 
     public var detail: String {
         switch self {
-        case .tap: "按下即触发"
-        case .doubleTap: "快速连按两次"
-        case .longPress: "按住超过设定时长后触发一次"
-        case .hold: "按下开始、松开结束，适合按住说话"
+        case .tap: L10n.text("按下即触发")
+        case .doubleTap: L10n.text("快速连按两次")
+        case .longPress: L10n.text("按住超过设定时长后触发一次")
+        case .hold: L10n.text("按下开始、松开结束，适合按住说话")
         }
     }
 

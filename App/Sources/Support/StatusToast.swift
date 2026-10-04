@@ -16,9 +16,9 @@ final class StatusToast {
 
         var content: Content {
             switch self {
-            case .cursor: Content(symbol: "cursorarrow", title: "光标")
-            case .wheel: Content(symbol: "scroll", title: "滚轮 · 滑动翻页")
-            case .gestures: Content(symbol: "hand.draw", title: "触控手势")
+            case .cursor: Content(symbol: "cursorarrow", title: L10n.text("光标"))
+            case .wheel: Content(symbol: "scroll", title: L10n.text("滚轮 · 滑动翻页"))
+            case .gestures: Content(symbol: "hand.draw", title: L10n.text("触控手势"))
             }
         }
     }
@@ -148,5 +148,7 @@ struct StatusToastView: View {
         .hudBackground()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .padding(.bottom, 20)
+        .environment(\.locale, L10n.locale)
+        .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight)
     }
 }

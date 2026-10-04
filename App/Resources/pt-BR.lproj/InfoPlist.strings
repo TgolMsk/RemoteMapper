@@ -1,0 +1,5 @@
+// RemoteMapper localization
+"NSAppleEventsUsageDescription" = "O RemoteMapper envia eventos da Apple para executar as ações AppleScript atribuídas ao controle remoto.";
+"NSBluetoothAlwaysUsageDescription" = "O RemoteMapper usa Bluetooth para ler o nível da bateria e o estado da conexão do Siri Remote.";
+"NSMicrophoneUsageDescription" = "A entrada de voz grava pelo microfone enquanto você mantém um botão do controle pressionado e converte a fala em texto neste Mac.";
+"NSSpeechRecognitionUsageDescription" = "A entrada de voz converte sua fala em texto neste Mac.";

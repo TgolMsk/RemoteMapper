@@ -52,7 +52,7 @@ public enum SlideShow {
             if autoUnlock, let message = await LockScreen.unlock() { return message }
             if autoUnlock { log.info("已输入解锁密码，等待解锁完成") } else { log.info("屏幕已锁定，等待解锁") }
             guard await waitUntilUnlocked(timeout: autoUnlock ? .seconds(8) : .seconds(60)) else {
-                return "屏幕仍处于锁定状态，未放映 \(url.lastPathComponent)"
+                return L10n.format("屏幕仍处于锁定状态，未放映 %@", url.lastPathComponent)
             }
             // 解锁动画结束、桌面恢复后再打开
             try? await Task.sleep(for: .milliseconds(800))
@@ -60,7 +60,7 @@ public enum SlideShow {
 
         guard let appURL = NSWorkspace.shared.urlForApplication(toOpen: url),
               let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
-            return "没有 App 能打开 \(url.lastPathComponent)"
+            return L10n.format("没有 App 能打开 %@", url.lastPathComponent)
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
@@ -68,14 +68,14 @@ public enum SlideShow {
         do {
             app = try await NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration)
         } catch {
-            return "无法打开 \(url.lastPathComponent)：\(error.localizedDescription)"
+            return L10n.format("无法打开 %@：%@", url.lastPathComponent, error.localizedDescription)
         }
         guard let shortcut = startPreset(forApp: bundleID).flatMap(\.action.keyCombo) else {
-            return "\(url.lastPathComponent) 已打开，但 \(bundleID) 不支持自动放映"
+            return L10n.format("%@ 已打开，但 %@ 不支持自动放映", url.lastPathComponent, bundleID)
         }
         log.info("已用 \(bundleID, privacy: .public) 打开文稿，等待窗口就绪")
         guard await waitForDocument(app, named: url.deletingPathExtension().lastPathComponent) else {
-            return "等待 \(url.lastPathComponent) 打开超时，未放映"
+            return L10n.format("等待 %@ 打开超时，未放映", url.lastPathComponent)
         }
         // 窗口刚出现时内容可能还在加载，稍等再放映
         try? await Task.sleep(for: .milliseconds(800))

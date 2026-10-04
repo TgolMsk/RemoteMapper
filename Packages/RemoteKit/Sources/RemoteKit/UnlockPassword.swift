@@ -13,8 +13,8 @@ public enum UnlockPassword {
     public struct KeychainError: LocalizedError {
         let status: OSStatus
         public var errorDescription: String? {
-            let reason = SecCopyErrorMessageString(status, nil) as String? ?? "错误码 \(status)"
-            return "钥匙串：\(reason)"
+            let reason = SecCopyErrorMessageString(status, nil) as String? ?? L10n.format("错误码 %d", status)
+            return L10n.format("钥匙串：%@", reason)
         }
     }
 

@@ -688,7 +688,7 @@ final class RecordingPointerOutput: PointerOutput {
         #expect(!pointer.isGlobal)
         // 侧键单击为确定、双击切换滚轮；按下触控板为左键（可拖动）；返回键为右键
         #expect(pointer.mapping(for: .siri)?.tap?.action == .mouseButton(.left))
-        #expect(pointer.mapping(for: .siri)?.tap?.displayTitle == "确定")
+        #expect(pointer.mapping(for: .siri)?.tap?.displayTitle == L10n.text("确定"))
         #expect(pointer.mapping(for: .siri)?.doubleTap?.action == .pointerScroll)
         #expect(pointer.mapping(for: .select)?.hold?.action == .mouseButton(.left))
         // 触控板四周按下也是左键，不再继承方向键
@@ -913,13 +913,13 @@ final class SystemRecorder {
     @Test func longPressTwiceShutsDown() async {
         let (engine, clock, recorder) = makeEngine()
         longPress(engine, clock)
-        #expect(engine.statusMessage?.title == "电源")
+        #expect(engine.statusMessage?.title == L10n.text("电源"))
         await settle()
         #expect(recorder.commands.isEmpty)
         longPress(engine, clock)
         await settle()
         #expect(recorder.commands == [.shutDown])
-        #expect(engine.statusMessage?.title == "正在关机…")
+        #expect(engine.statusMessage?.title == L10n.format("正在%@…", SystemCommand.shutDown.displayName))
     }
 
     @Test func longPressThenDoubleTapRestarts() async {
@@ -937,18 +937,18 @@ final class SystemRecorder {
         engine.device.onButton?(.back, false)
         await settle()
         #expect(recorder.commands.isEmpty)
-        #expect(engine.statusMessage?.title == "已取消")
+        #expect(engine.statusMessage?.title == L10n.text("已取消"))
         // 取消后再长按只是重新弹出菜单，不会关机
         longPress(engine, clock)
         await settle()
-        #expect(recorder.commands.isEmpty && engine.statusMessage?.title == "电源")
+        #expect(recorder.commands.isEmpty && engine.statusMessage?.title == L10n.text("电源"))
     }
 
     @Test func menuTimesOut() async {
         let (engine, clock, recorder) = makeEngine()
         longPress(engine, clock)
         clock.advance(RemoteEngine.powerMenuTimeout + 0.1)
-        #expect(engine.statusMessage?.title == "已取消")
+        #expect(engine.statusMessage?.title == L10n.text("已取消"))
         longPress(engine, clock)
         await settle()
         #expect(recorder.commands.isEmpty)
@@ -1045,7 +1045,7 @@ final class SystemRecorder {
         // 手写配置可以省略 unlock，默认不解锁
         let handWritten = #"{"type": "playSlides", "path": "/tmp/a.key"}"#
         #expect(try JSONDecoder().decode(Action.self, from: Data(handWritten.utf8)) == .playSlides(path: "/tmp/a.key", unlock: false))
-        #expect(action.summary == "发布会.pptx · 先解锁")
+        #expect(action.summary == "发布会.pptx" + L10n.text(" · 先解锁"))
     }
 
     /// 拖入时只接受演示文稿，路径以 ~ 开头保存

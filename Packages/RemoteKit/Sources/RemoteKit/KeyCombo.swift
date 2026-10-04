@@ -39,7 +39,7 @@ public struct Modifiers: OptionSet, Hashable, Sendable, Codable {
         var result: Modifiers = []
         for name in names {
             guard let entry = Self.ordered.first(where: { $0.name == name }) else {
-                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "未知修饰键 \(name)"))
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: L10n.format("未知修饰键 %@", name)))
             }
             result.insert(entry.0)
         }
@@ -87,7 +87,7 @@ public struct KeyCombo: Hashable, Sendable, Codable {
         modifiers = try c.decodeIfPresent(Modifiers.self, forKey: .modifiers) ?? []
         if let name = try c.decodeIfPresent(String.self, forKey: .key) {
             guard let code = KeyNames.code(for: name) else {
-                throw DecodingError.dataCorruptedError(forKey: .key, in: c, debugDescription: "未知按键 \(name)")
+                throw DecodingError.dataCorruptedError(forKey: .key, in: c, debugDescription: L10n.format("未知按键 %@", name))
             }
             keyCode = code
         } else {
@@ -162,7 +162,7 @@ public enum KeyNames {
     }
 
     public static func glyph(for code: UInt16) -> String {
-        table.first { $0.code == Int(code) }?.glyph ?? "#\(code)"
+        table.first { $0.code == Int(code) }.map { L10n.text($0.glyph) } ?? "#\(code)"
     }
 
     /// 修饰键本身的键码对应的事件标志位

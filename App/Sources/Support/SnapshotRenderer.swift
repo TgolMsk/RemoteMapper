@@ -59,7 +59,7 @@ enum SnapshotRenderer {
 
             // 语音输入浮窗：识别中、出错两种状态
             for (name, phase, text, level) in [("listening", VoiceDictation.Phase.listening, "帮我把这个函数改成异步的，并补上单元测试", Float(0.7)),
-                                               ("failed", .failed("没有可用的麦克风：请连接 AirPods、耳机或 USB 麦克风"), "", 0)] {
+                                               ("failed", .failed(L10n.text("没有可用的麦克风：请连接 AirPods、耳机或 USB 麦克风")), "", 0)] {
                 let model = AppModel.preview()
                 model.engine.dictation.simulate(phase: phase, transcript: text, level: level)
                 // 让波形有历史数据可画
@@ -73,7 +73,7 @@ enum SnapshotRenderer {
 
             render(MenuBarPanel().environment(AppModel.preview()).fixedSize()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(Color(nsColor: .windowBackgroundColor)), size: CGSize(width: 300, height: 230),
+                    .background(Color(nsColor: .windowBackgroundColor)), size: CGSize(width: 340, height: 250),
                    appearance: appearance, to: directory.appending(path: "menubar-\(suffix).png"))
         }
     }
@@ -82,7 +82,9 @@ enum SnapshotRenderer {
         let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: -20000, y: -20000), size: size),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: appearance)
-        let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
+        let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height)
+            .environment(\.locale, L10n.locale)
+            .environment(\.layoutDirection, L10n.language.isRightToLeft ? .rightToLeft : .leftToRight))
         host.frame = CGRect(origin: .zero, size: size)
         window.contentView = host
         window.orderFrontRegardless()
