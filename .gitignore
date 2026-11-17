@@ -5,3 +5,8 @@ build/
 *.xcodeproj/
 xcuserdata/
 Packages/RemoteKit/.build/
+
+# 本机推广素材与 Claude Code 本地设置，不入库
+Promo/
+Campaign/
+.claude/

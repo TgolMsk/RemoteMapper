@@ -1,6 +1,14 @@
 APP := build/DerivedData/Build/Products/Debug/RemoteMapper.app
 RELEASE_APP := build/DerivedData/Build/Products/Release/RemoteMapper.app
-XCODEBUILD := xcodebuild -project RemoteMapper.xcodeproj -scheme RemoteMapper -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData
+# 签名：钥匙串里有维护者团队（VVB976RN4W）的证书时按 project.yml 签名；否则改用 ad-hoc 签名，
+# 不需要 Apple 开发者帐户（每次重新编译后系统可能要求重新授予辅助功能等权限）。
+# 也可手动指定：make build SIGN=adhoc
+TEAM := VVB976RN4W
+SIGN ?= $(if $(shell security find-identity -v -p codesigning 2>/dev/null | grep '($(TEAM))'),team,adhoc)
+ifeq ($(SIGN),adhoc)
+SIGN_FLAGS := CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+endif
+XCODEBUILD := xcodebuild -project RemoteMapper.xcodeproj -scheme RemoteMapper -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData $(SIGN_FLAGS)
 
 .PHONY: project build run test snapshot icon probe dotcall release install dist clean
 

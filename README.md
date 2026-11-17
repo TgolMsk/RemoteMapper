@@ -13,7 +13,9 @@ make snapshot   # 渲染所有界面截图到 build/snapshots
 make install    # Release 版安装到 /Applications（开机自启需要从这里运行）
 ```
 
-依赖：Xcode 27、macOS 26、[XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`）。
+依赖：Xcode 27、macOS 26、[XcodeGen](https://github.com/yonaskolb/XcodeGen) 和 Opus（`brew install xcodegen opus`）。
+
+不需要 Apple 开发者帐户：钥匙串里没有维护者团队的证书时，`make build` / `make run` 自动改用 ad-hoc 签名（也可写 `make run SIGN=adhoc`）。ad-hoc 签名的 App 每次重新编译后，系统可能要求重新授予辅助功能等权限。
 
 ## 界面语言
 
@@ -35,7 +37,7 @@ build/DerivedData/Build/Products/Debug/RemoteMapper.app/Contents/MacOS/RemoteMap
 - **正式版**：`make dist` 在本机用 Developer ID 签名、经 Apple 公证后打包 DMG，下载后可直接打开。
 - **云端自用构建**：推送与 `MARKETING_VERSION` 一致的 `v版本号` 标签会触发 `Full macOS Release` 工作流，
   在 macOS 26 / Xcode 26.6 上运行核心测试、音频组件模拟验证并打包，发布到
-  [GitHub Releases](https://github.com/TgolMsk/RemoteMapper/releases)（私有仓库需登录有访问权限的 GitHub 帐户）。
+  [GitHub Releases](https://github.com/TgolMsk/RemoteMapper/releases)。
   采用 ad-hoc 本地签名、未经 Apple 公证，首次打开如被拦截，在「系统设置 › 隐私与安全性」中允许打开。
   手动运行该工作流只生成 Actions 附件，不创建 Release。附件包含音频组件对应源码、Opus 源码、构建提交及
   SHA-256 校验和。云端测试不替代实体遥控器的按键、录音与听写实测。
@@ -107,3 +109,15 @@ make mic-uninstall  # 卸载并恢复蓝牙调试设置
 独立音频组件源码与来源说明见 [AudioBridge/NOTICE.md](AudioBridge/NOTICE.md)，构建在
 `build/Microphone`，测试记录在 `build/MicrophoneTests`。模拟测试不代表实体遥控器录音通过；
 实机验证必须从 CoreAudio 输入录到非静音语音，并核对松键后静音和采集停止。
+
+## 许可证
+
+RemoteMapper 以 [GNU 通用公共许可证第 3 版（GPL-3.0）](LICENSE) 发布。你可以自由使用、修改和再发布；
+再发布修改版时须同样以 GPL-3.0 公开对应源码。
+
+遥控器麦克风组件 `AudioBridge/` 基于 [SiriRemoteForge](https://github.com/HOLODATA-COM/SiriRemoteForge)
+与 Existential Audio 的 [BlackHole](https://github.com/ExistentialAudio/BlackHole)（均为 GPL-3.0），
+静态链接的 libopus 为 BSD 许可，来源与原版权声明见 [AudioBridge/NOTICE.md](AudioBridge/NOTICE.md)。
+
+Apple、Apple TV、Siri、Mac 和 macOS 是 Apple Inc. 在美国及其他国家和地区注册的商标。
+本项目是独立开发的开源软件，与 Apple Inc. 没有关联，也未获其认可或赞助。
