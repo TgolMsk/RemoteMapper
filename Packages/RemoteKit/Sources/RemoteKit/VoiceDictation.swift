@@ -140,6 +140,10 @@ public final class VoiceDictation {
             modelState = .unsupported
             return
         }
+        if await Self.isInstalled(locale) {
+            modelState = .installed
+            return
+        }
         switch await AssetInventory.status(forModules: [Self.makeTranscriber(locale)]) {
         case .installed: modelState = .installed
         case .downloading: if case .downloading = modelState {} else { modelState = .downloading(0) }
@@ -154,6 +158,10 @@ public final class VoiceDictation {
         if case .downloading = modelState { return }
         guard let locale = await resolvedLocale() else {
             modelState = .unsupported
+            return
+        }
+        if await Self.isInstalled(locale) {
+            modelState = .installed
             return
         }
         do {
@@ -198,12 +206,14 @@ public final class VoiceDictation {
             return fail(L10n.text("不支持当前识别语言"))
         }
         let transcriber = Self.makeTranscriber(locale)
-        let status = await AssetInventory.status(forModules: [transcriber])
-        guard !Task.isCancelled else { return }
-        guard status == .installed else {
+        if await !Self.isInstalled(locale) {
+            let status = await AssetInventory.status(forModules: [transcriber])
+            guard !Task.isCancelled else { return }
             if status == .unsupported { return fail(L10n.text("此 Mac 不支持该语言的语音识别")) }
-            Task { await installModel() }
-            return fail(L10n.text("正在下载语音识别模型，下载完成后即可使用"))
+            if status != .installed {
+                Task { await installModel() }
+                return fail(L10n.text("正在下载语音识别模型，下载完成后即可使用"))
+            }
         }
         guard !Task.isCancelled else { return }
 
@@ -290,6 +300,13 @@ public final class VoiceDictation {
     private func resolvedLocale() async -> Locale? {
         let requested = settings.localeIdentifier.map(Locale.init(identifier:)) ?? Locale.current
         return await DictationTranscriber.supportedLocale(equivalentTo: requested)
+    }
+
+    /// 模型是否已安装。不能只看 AssetInventory.status：系统语音服务（localspeechrecognition）空闲退出后，
+    /// 进程内缓存的连接失效（XPC 4099），status 会一直返回 .supported 直到 App 重启，而识别与 installedLocales 都不受影响。
+    private static func isInstalled(_ locale: Locale) async -> Bool {
+        let identifier = locale.identifier(.bcp47)
+        return await DictationTranscriber.installedLocales.contains { $0.identifier(.bcp47) == identifier }
     }
 
     private static func makeTranscriber(_ locale: Locale) -> DictationTranscriber {
